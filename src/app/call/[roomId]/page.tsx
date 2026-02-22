@@ -19,26 +19,215 @@ export default function CallRoom() {
     const [isCameraOff, setIsCameraOff] = useState(false);
     const [callStatus, setCallStatus] = useState("Connecting to room...");
 
+    // useEffect(() => {
+    //     if (!socket) {
+    //         console.warn("Socket not ready yet");
+    //         return;
+    //     }
+
+    //     console.log("Socket is ready. Joining room:", roomId);
+
+    //     const initializeCall = async () => {
+    //         try {
+    //             // Get local media
+    //             const stream = await navigator.mediaDevices.getUserMedia({
+    //                 video: { facingMode: "user" }, // Prefer front camera on mobile
+    //                 audio: true,
+    //             });
+
+    //             localStreamRef.current = stream;
+
+    //             if (localVideoRef.current) {
+    //                 localVideoRef.current.srcObject = stream;
+    //             }
+
+    //             // Create peer connection
+    //             peerConnectionRef.current = new RTCPeerConnection({
+    //                 iceServers: [
+    //                     { urls: "stun:stun.l.google.com:19302" },
+    //                     { urls: "stun:stun1.l.google.com:19302" },
+    //                     { urls: "stun:stun2.l.google.com:19302" },
+    //                 ],
+    //             });
+
+    //             // Add local tracks
+    //             stream.getTracks().forEach((track) => {
+    //                 peerConnectionRef.current?.addTrack(track, stream);
+    //             });
+
+    //             // Receive remote stream
+    //             peerConnectionRef.current.ontrack = (event) => {
+    //                 console.log("Remote stream received!");
+    //                 if (remoteVideoRef.current) {
+    //                     remoteVideoRef.current.srcObject = event.streams[0];
+    //                     setCallStatus("Connected");
+    //                 }
+    //             };
+
+    //             // Send ICE candidates to other peer
+    //             peerConnectionRef.current.onicecandidate = (event) => {
+    //                 if (event.candidate) {
+    //                     console.log("Sending ICE candidate");
+    //                     socket.emit("ice-candidate", event.candidate, roomId);
+    //                 }
+    //             };
+
+    //             // Join the room
+    //             socket.emit("join-room", roomId);
+
+    //         } catch (err: any) {
+    //             console.error("Media/Peer error:", err.name, err.message);
+    //             setCallStatus(`Failed: ${err.name} - ${err.message}`);
+    //             alert("Camera/microphone access failed. Please allow it in browser settings.");
+    //         }
+    //     };
+
+    //     initializeCall();
+
+    //     // ────────────────────────────────────────────────
+    //     // Signaling handlers
+    //     // ────────────────────────────────────────────────
+
+    //     socket.on("ready", async () => {
+    //         console.log("Room is ready – creating offer");
+    //         try {
+    //             const offer = await peerConnectionRef.current?.createOffer();
+    //             await peerConnectionRef.current?.setLocalDescription(offer);
+    //             socket.emit("offer", offer, roomId);
+    //         } catch (err) {
+    //             console.error("Offer creation failed:", err);
+    //         }
+    //     });
+
+    //     socket.on("offer", async (offer) => {
+    //         console.log("Received offer");
+    //         try {
+    //             await peerConnectionRef.current?.setRemoteDescription(offer);
+    //             const answer = await peerConnectionRef.current?.createAnswer();
+    //             await peerConnectionRef.current?.setLocalDescription(answer);
+    //             socket.emit("answer", answer, roomId);
+    //         } catch (err) {
+    //             console.error("Answer failed:", err);
+    //         }
+    //     });
+
+    //     socket.on("answer", async (answer) => {
+    //         console.log("Received answer");
+    //         try {
+    //             await peerConnectionRef.current?.setRemoteDescription(answer);
+    //         } catch (err) {
+    //             console.error("Set remote answer failed:", err);
+    //         }
+    //     });
+
+    //     socket.on("ice-candidate", async (candidate) => {
+    //         console.log("Received ICE candidate");
+    //         try {
+    //             await peerConnectionRef.current?.addIceCandidate(candidate);
+    //         } catch (err) {
+    //             console.error("Add ICE candidate failed:", err);
+    //         }
+    //     });
+
+    //     socket.on("user-joined", () => {
+    //         console.log("Another user joined the room");
+    //         setCallStatus("Waiting for connection...");
+    //     });
+
+    //     socket.on("room-full", () => {
+    //         console.log("Room is full");
+    //         alert("Room is full (max 2 users)");
+    //         router.push("/dashboard");
+    //     });
+
+    //     socket.on("user-disconnected", () => {
+    //         console.log("Other user left");
+    //         setCallStatus("Other user disconnected");
+    //         if (remoteVideoRef.current) {
+    //             remoteVideoRef.current.srcObject = null;
+    //         }
+    //     });
+
+    //     // Cleanup
+    //     return () => {
+    //         console.log("Cleaning up call room");
+
+    //         // Stop media tracks
+    //         if (localStreamRef.current) {
+    //             localStreamRef.current.getTracks().forEach((track) => track.stop());
+    //             localStreamRef.current = null;
+    //         }
+
+    //         // Close peer connection
+    //         if (peerConnectionRef.current) {
+    //             peerConnectionRef.current.close();
+    //             peerConnectionRef.current = null;
+    //         }
+
+    //         // Socket cleanup is handled by useSocket hook
+    //     };
+    // }, [socket, roomId, router]);
+
+
     useEffect(() => {
         if (!socket) {
             console.warn("Socket not ready yet");
             return;
         }
 
-        console.log("Socket is ready. Joining room:", roomId);
+        console.log("Socket instance ready for room:", roomId);
+
+        let joined = false; // Prevent duplicate joins
+
+        const joinRoom = () => {
+            if (joined) return;
+            console.log("Emitting join-room for:", roomId);
+            socket.emit("join-room", roomId);
+            joined = true;
+        };
+
+        // Join immediately if already connected
+        if (socket.connected) {
+            console.log("Socket already connected → joining now");
+            joinRoom();
+        } else {
+            // Wait for connect event
+            const onConnect = () => {
+                console.log("Socket connected event fired → joining room");
+                joinRoom();
+            };
+            socket.on("connect", onConnect);
+
+            // Cleanup connect listener
+            return () => {
+                socket.off("connect", onConnect);
+            };
+        }
+
+        // Retry join every 3 seconds if not confirmed
+        // const retryInterval = setInterval(() => {
+        //     if (!joined && socket.connected) {
+        //         console.log("Retry join-room (not yet confirmed)");
+        //         socket.emit("join-room", roomId);
+        //     }
+        // }, 3000);
 
         const initializeCall = async () => {
             try {
-                // Get local media
+                console.log("Starting getUserMedia...");
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "user" }, // Prefer front camera on mobile
+                    video: { facingMode: "user" },
                     audio: true,
                 });
 
+                console.log("Stream acquired! Tracks:", stream.getTracks().length);
                 localStreamRef.current = stream;
 
                 if (localVideoRef.current) {
                     localVideoRef.current.srcObject = stream;
+                    console.log("Local video srcObject set successfully");
+                } else {
+                    console.warn("localVideoRef.current is null!");
                 }
 
                 // Create peer connection
@@ -50,21 +239,18 @@ export default function CallRoom() {
                     ],
                 });
 
-                // Add local tracks
                 stream.getTracks().forEach((track) => {
                     peerConnectionRef.current?.addTrack(track, stream);
                 });
 
-                // Receive remote stream
                 peerConnectionRef.current.ontrack = (event) => {
-                    console.log("Remote stream received!");
+                    console.log("REMOTE STREAM RECEIVED!");
                     if (remoteVideoRef.current) {
                         remoteVideoRef.current.srcObject = event.streams[0];
                         setCallStatus("Connected");
                     }
                 };
 
-                // Send ICE candidates to other peer
                 peerConnectionRef.current.onicecandidate = (event) => {
                     if (event.candidate) {
                         console.log("Sending ICE candidate");
@@ -72,16 +258,14 @@ export default function CallRoom() {
                     }
                 };
 
-                // Join the room
-                socket.emit("join-room", roomId);
-
             } catch (err: any) {
-                console.error("Media/Peer error:", err.name, err.message);
+                console.error("getUserMedia or Peer error:", err.name, err.message, err.stack);
                 setCallStatus(`Failed: ${err.name} - ${err.message}`);
-                alert("Camera/microphone access failed. Please allow it in browser settings.");
+                alert(`Camera/mic failed: ${err.message}\n\nCheck browser permissions or use HTTPS.`);
             }
         };
 
+        // Run media init
         initializeCall();
 
         // ────────────────────────────────────────────────
@@ -89,7 +273,7 @@ export default function CallRoom() {
         // ────────────────────────────────────────────────
 
         socket.on("ready", async () => {
-            console.log("Room is ready – creating offer");
+            console.log("Received 'ready' → creating offer");
             try {
                 const offer = await peerConnectionRef.current?.createOffer();
                 await peerConnectionRef.current?.setLocalDescription(offer);
@@ -152,19 +336,19 @@ export default function CallRoom() {
         return () => {
             console.log("Cleaning up call room");
 
-            // Stop media tracks
+            // clearInterval(retryInterval);
+
             if (localStreamRef.current) {
                 localStreamRef.current.getTracks().forEach((track) => track.stop());
                 localStreamRef.current = null;
             }
 
-            // Close peer connection
             if (peerConnectionRef.current) {
                 peerConnectionRef.current.close();
                 peerConnectionRef.current = null;
             }
 
-            // Socket cleanup is handled by useSocket hook
+            // Socket cleanup handled by useSocket hook
         };
     }, [socket, roomId, router]);
 
