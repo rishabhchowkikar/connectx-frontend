@@ -493,108 +493,111 @@ export default function CallRoom() {
     // ======================================
     return (
         <div className="relative h-screen bg-[#202124] overflow-hidden flex flex-col">
-            {/* Top Left Status */}
-            <div className="absolute top-4 left-6 flex items-center gap-4 z-20">
-                <div className="bg-black/60 text-white px-5 py-2 rounded-lg text-sm font-medium backdrop-blur-md border border-white/10 shadow-sm">
-                    {callStatus}
-                </div>
+        {/* Top Left Status */}
+        <div className="absolute top-4 left-6 flex items-center gap-4 z-20">
+            <div className="bg-black/60 text-white px-5 py-2 rounded-lg text-sm font-medium backdrop-blur-md border border-white/10 shadow-sm">
+                {callStatus}
             </div>
+        </div>
 
-            {/* Video Container */}
-            <div className="flex-1 w-full relative">
-                {remoteConnected ? (
-                    <video
-                        ref={remoteVideoRef}
-                        autoPlay
-                        playsInline
-                        className="absolute inset-0 w-full h-full object-cover"
-                    />
-                ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex flex-col items-center">
-                            <div className="w-32 h-32 rounded-full border border-gray-700 flex items-center justify-center animate-pulse bg-gray-800/30 mb-6">
-                                <div className="text-gray-400 font-medium text-lg">Waiting</div>
-                            </div>
+        {/* Video Container */}
+        <div className="flex-1 w-full relative">
+
+            {/* ✅ ALWAYS rendered — hidden/shown via CSS not conditional render */}
+            <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className={`absolute inset-0 w-full h-full object-cover ${remoteConnected ? "block" : "hidden"}`}
+            />
+
+            {/* Waiting state */}
+            {!remoteConnected && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="flex flex-col items-center">
+                        <div className="w-32 h-32 rounded-full border border-gray-700 flex items-center justify-center animate-pulse bg-gray-800/30 mb-6">
+                            <div className="text-gray-400 font-medium text-lg">Waiting</div>
                         </div>
-                    </div>
-                )}
-
-                {remoteConnected && remoteUserName !== "Waiting..." && (
-                    <div className="absolute bottom-6 left-6 bg-black/60 text-white text-sm px-3 py-1.5 rounded-md backdrop-blur-md z-10">
-                        {remoteUserName}
-                    </div>
-                )}
-
-                {/* Local PIP Video */}
-                <div className="absolute top-4 right-4 z-20 transition-all duration-300">
-                    <div className="relative w-64 aspect-video rounded-xl border-2 border-gray-600 shadow-2xl overflow-hidden bg-gray-900 group">
-                        <video
-                            ref={localVideoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className={`w-full h-full object-cover transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
-                        />
-                        {isCameraOff && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-0">
-                                <div className="w-14 h-14 rounded-full bg-blue-500 shadow-lg flex items-center justify-center">
-                                    <span className="text-2xl text-white font-medium">{userName.charAt(0).toUpperCase()}</span>
-                                </div>
-                            </div>
-                        )}
-                        <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-md z-10">
-                            You
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Invite Popup Floating over UI */}
-            {!remoteConnected && showInvitePopup && (
-                <div className="absolute bottom-24 left-6 bg-white rounded-lg shadow-2xl p-6 w-[360px] z-30 animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="flex justify-between items-start mb-4">
-                        <h2 className="text-gray-900 font-medium text-lg">Your meeting's ready</h2>
-                        <button onClick={() => setShowInvitePopup(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
-                    <p className="text-gray-600 text-sm mb-4">
-                        Share this meeting link with others you want in the meeting.
-                    </p>
-                    <div className="bg-gray-100 rounded-md p-3 flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700 truncate mr-3">
-                            {typeof window !== 'undefined' ? `${window.location.origin}/call/${roomId}` : ''}
-                        </span>
-                        <button onClick={copyInviteLink} className="text-gray-500 hover:text-gray-800 transition-colors bg-transparent border-none p-2 shrink-0 rounded hover:bg-gray-200">
-                            <Copy className="w-5 h-5" />
-                        </button>
                     </div>
                 </div>
             )}
 
-            {/* Bottom Controls Bar */}
-            <div className="h-24 bg-[#202124] flex items-center justify-center gap-5 z-20 shrink-0 border-t border-gray-800">
-                <button
-                    onClick={toggleMute}
-                    className={`p-4 rounded-full transition-all border ${isMuted ? "bg-[#ea4335] border-transparent hover:bg-red-600 text-white" : "bg-[#3c4043] border-gray-600 hover:bg-[#4d5155] text-white shadow-md"}`}
-                >
-                    {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                </button>
+            {remoteConnected && remoteUserName !== "Waiting..." && (
+                <div className="absolute bottom-6 left-6 bg-black/60 text-white text-sm px-3 py-1.5 rounded-md backdrop-blur-md z-10">
+                    {remoteUserName}
+                </div>
+            )}
 
-                <button
-                    onClick={toggleCamera}
-                    className={`p-4 rounded-full transition-all border ${isCameraOff ? "bg-[#ea4335] border-transparent hover:bg-red-600 text-white" : "bg-[#3c4043] border-gray-600 hover:bg-[#4d5155] text-white shadow-md"}`}
-                >
-                    {isCameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
-                </button>
-
-                <button
-                    onClick={handleEndCall}
-                    className="p-4 px-6 bg-[#ea4335] hover:bg-red-600 text-white font-medium rounded-full transition-all shadow-lg ml-3 border border-transparent flex items-center gap-2"
-                >
-                    <PhoneOff className="w-6 h-6" />
-                </button>
+            {/* Local PIP Video */}
+            <div className="absolute top-4 right-4 z-20 transition-all duration-300">
+                <div className="relative w-64 aspect-video rounded-xl border-2 border-gray-600 shadow-2xl overflow-hidden bg-gray-900 group">
+                    <video
+                        ref={localVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={`w-full h-full object-cover transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
+                    />
+                    {isCameraOff && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-0">
+                            <div className="w-14 h-14 rounded-full bg-blue-500 shadow-lg flex items-center justify-center">
+                                <span className="text-2xl text-white font-medium">{userName.charAt(0).toUpperCase()}</span>
+                            </div>
+                        </div>
+                    )}
+                    <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-md z-10">
+                        You
+                    </div>
+                </div>
             </div>
         </div>
+
+        {/* Invite Popup Floating over UI */}
+        {!remoteConnected && showInvitePopup && (
+            <div className="absolute bottom-24 left-6 bg-white rounded-lg shadow-2xl p-6 w-[360px] z-30 animate-in slide-in-from-bottom-4 duration-300">
+                <div className="flex justify-between items-start mb-4">
+                    <h2 className="text-gray-900 font-medium text-lg">Your meeting's ready</h2>
+                    <button onClick={() => setShowInvitePopup(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <p className="text-gray-600 text-sm mb-4">
+                    Share this meeting link with others you want in the meeting.
+                </p>
+                <div className="bg-gray-100 rounded-md p-3 flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700 truncate mr-3">
+                        {typeof window !== 'undefined' ? `${window.location.origin}/call/${roomId}` : ''}
+                    </span>
+                    <button onClick={copyInviteLink} className="text-gray-500 hover:text-gray-800 transition-colors bg-transparent border-none p-2 shrink-0 rounded hover:bg-gray-200">
+                        <Copy className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {/* Bottom Controls Bar */}
+        <div className="h-24 bg-[#202124] flex items-center justify-center gap-5 z-20 shrink-0 border-t border-gray-800">
+            <button
+                onClick={toggleMute}
+                className={`p-4 rounded-full transition-all border ${isMuted ? "bg-[#ea4335] border-transparent hover:bg-red-600 text-white" : "bg-[#3c4043] border-gray-600 hover:bg-[#4d5155] text-white shadow-md"}`}
+            >
+                {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+            </button>
+
+            <button
+                onClick={toggleCamera}
+                className={`p-4 rounded-full transition-all border ${isCameraOff ? "bg-[#ea4335] border-transparent hover:bg-red-600 text-white" : "bg-[#3c4043] border-gray-600 hover:bg-[#4d5155] text-white shadow-md"}`}
+            >
+                {isCameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+            </button>
+
+            <button
+                onClick={handleEndCall}
+                className="p-4 px-6 bg-[#ea4335] hover:bg-red-600 text-white font-medium rounded-full transition-all shadow-lg ml-3 border border-transparent flex items-center gap-2"
+            >
+                <PhoneOff className="w-6 h-6" />
+            </button>
+        </div>
+    </div>
     );
 }
