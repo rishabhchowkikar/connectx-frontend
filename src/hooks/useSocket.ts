@@ -21,7 +21,8 @@ export const useSocket = () => {
             setSocket(newSocket);  // ← Triggers re-render with real socket
         });
 
-        newSocket.on("disconnect", () => {
+        newSocket.on("disconnect", (reason) => {
+            console.log("❌ Socket Disconnected — reason:", reason); // ← reason tells us WHY
             console.log("Socket Disconnected");
             setSocket(null);
         });

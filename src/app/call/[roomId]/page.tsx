@@ -207,7 +207,21 @@ export default function CallRoom() {
             iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
                 { urls: "stun:stun1.l.google.com:19302" },
-                { urls: "stun:stun2.l.google.com:19302" },
+                {
+                    urls: "turn:openrelay.metered.ca:80",
+                    username: "openrelayproject",
+                    credential: "openrelayproject",
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:443",
+                    username: "openrelayproject",
+                    credential: "openrelayproject",
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                    username: "openrelayproject",
+                    credential: "openrelayproject",
+                },
             ],
         });
 
@@ -238,10 +252,15 @@ export default function CallRoom() {
         // ── Socket Handlers ──────────────────────────────────────
 
         const handleReady = async () => {
+            console.log("✅ READY received — creating offer");
+            console.log("PeerConnection state:", peerConnectionRef.current?.signalingState)
             try {
                 const offer = await peerConnectionRef.current?.createOffer();
+                console.log("✅ Offer created:", offer);
                 await peerConnectionRef.current?.setLocalDescription(offer);
+                console.log("✅ Local description set");
                 socket.emit("offer", offer, roomId);
+                console.log("✅ Offer emitted");
             } catch (err) {
                 console.error("Offer creation failed:", err);
             }
