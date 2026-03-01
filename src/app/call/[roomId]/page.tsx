@@ -225,6 +225,25 @@ export default function CallRoom() {
             ],
         });
 
+        // ← ADD THESE 3 BLOCKS RIGHT AFTER:
+        peerConnectionRef.current.oniceconnectionstatechange = () => {
+            console.log("🧊 ICE state:", peerConnectionRef.current?.iceConnectionState);
+        };
+
+        peerConnectionRef.current.onicegatheringstatechange = () => {
+            console.log("🧊 ICE gathering:", peerConnectionRef.current?.iceGatheringState);
+        };
+
+        // Also update your existing onicecandidate:
+        peerConnectionRef.current.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log("🧊 Sending ICE candidate");
+                socket.emit("ice-candidate", event.candidate, roomId);
+            } else {
+                console.log("🧊 ICE gathering complete");
+            }
+        };
+
         // Add local tracks to peer connection
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((track) => {
@@ -267,19 +286,25 @@ export default function CallRoom() {
         };
 
         const handleOffer = async (offer: any) => {
+            console.log("📨 Offer received on this peer");
             try {
                 await peerConnectionRef.current?.setRemoteDescription(offer);
+                console.log("✅ Remote description set")
                 const answer = await peerConnectionRef.current?.createAnswer();
+                console.log("✅ Answer created")
                 await peerConnectionRef.current?.setLocalDescription(answer);
                 socket.emit("answer", answer, roomId);
+                console.log("✅ Answer emitted");
             } catch (err) {
                 console.error("Answer failed:", err);
             }
         };
 
         const handleAnswer = async (answer: any) => {
+            console.log("📨 Answer received on this peer");
             try {
                 await peerConnectionRef.current?.setRemoteDescription(answer);
+                console.log("✅ Remote answer set")
             } catch (err) {
                 console.error("Set remote answer failed:", err);
             }
