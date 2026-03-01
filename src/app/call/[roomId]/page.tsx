@@ -70,25 +70,139 @@ export default function CallRoom() {
     }, [hasJoined]);
 
     // 3. Socket signaling logic ONLY AFTER hasJoined is true
+    // useEffect(() => {
+    //     if (!hasJoined || !socket || !mediaStreamReady) return;
+
+    //     setCallStatus("Connecting to room...");
+
+    //     const joinRoom = () => {
+    //         // socket.emit("join-room", roomId);
+    //         socket.emit("join-room", { roomId, userName });
+    //     };
+
+    //     if (socket.connected) {
+    //         joinRoom();
+    //     } else {
+    //         const onConnect = () => joinRoom();
+    //         socket.on("connect", onConnect);
+    //         return () => socket.off("connect", onConnect);
+    //     }
+
+    //     // Setup RTCPeerConnection
+    //     peerConnectionRef.current = new RTCPeerConnection({
+    //         iceServers: [
+    //             { urls: "stun:stun.l.google.com:19302" },
+    //             { urls: "stun:stun1.l.google.com:19302" },
+    //             { urls: "stun:stun2.l.google.com:19302" },
+    //         ],
+    //     });
+
+    //     if (localStreamRef.current) {
+    //         localStreamRef.current.getTracks().forEach((track) => {
+    //             peerConnectionRef.current?.addTrack(track, localStreamRef.current!);
+    //         });
+    //     }
+
+    //     peerConnectionRef.current.ontrack = (event) => {
+    //         if (remoteVideoRef.current) {
+    //             remoteVideoRef.current.srcObject = event.streams[0];
+    //             setCallStatus("Connected");
+    //             setRemoteConnected(true);
+    //             setShowInvitePopup(false); // hide invite popup when someone joins
+    //         }
+    //     };
+
+    //     peerConnectionRef.current.onicecandidate = (event) => {
+    //         if (event.candidate) {
+    //             socket.emit("ice-candidate", event.candidate, roomId);
+    //         }
+    //     };
+
+    //     // Socket listeners
+    //     const handleReady = async () => {
+    //         try {
+    //             const offer = await peerConnectionRef.current?.createOffer();
+    //             await peerConnectionRef.current?.setLocalDescription(offer);
+    //             socket.emit("offer", offer, roomId);
+    //         } catch (err) {
+    //             console.error("Offer creation failed:", err);
+    //         }
+    //     };
+
+    //     const handleOffer = async (offer: any) => {
+    //         try {
+    //             await peerConnectionRef.current?.setRemoteDescription(offer);
+    //             const answer = await peerConnectionRef.current?.createAnswer();
+    //             await peerConnectionRef.current?.setLocalDescription(answer);
+    //             socket.emit("answer", answer, roomId);
+    //         } catch (err) {
+    //             console.error("Answer failed:", err);
+    //         }
+    //     };
+
+    //     const handleAnswer = async (answer: any) => {
+    //         try {
+    //             await peerConnectionRef.current?.setRemoteDescription(answer);
+    //         } catch (err) {
+    //             console.error("Set remote answer failed:", err);
+    //         }
+    //     };
+
+    //     const handleIceCandidate = async (candidate: any) => {
+    //         try {
+    //             await peerConnectionRef.current?.addIceCandidate(candidate);
+    //         } catch (err) {
+    //             console.error("Add ICE candidate failed:", err);
+    //         }
+    //     };
+
+    //     const handleUserJoined = (joiningUserName: string) => {
+    //         // setCallStatus("User joined. Negotiating...");
+    //         setRemoteUserName(joiningUserName);
+    //         setCallStatus(`${joiningUserName} joined. Negotiating...`);
+    //     };
+
+    //     const handleRoomFull = () => {
+    //         alert("Room is full (max 2 users)");
+    //         router.push("/dashboard");
+    //     };
+
+    //     const handleUserDisconnected = () => {
+    //         setCallStatus("Other user disconnected");
+    //         setRemoteConnected(false);
+    //         if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    //     };
+
+    //     socket.on("ready", handleReady);
+    //     socket.on("offer", handleOffer);
+    //     socket.on("answer", handleAnswer);
+    //     socket.on("ice-candidate", handleIceCandidate);
+    //     socket.on("user-joined", handleUserJoined);
+    //     socket.on("existing-user", (existingUserName: string) => {
+    //         setRemoteUserName(existingUserName);
+    //     });
+    //     socket.on("room-full", handleRoomFull);
+    //     socket.on("user-disconnected", handleUserDisconnected);
+
+    //     return () => {
+    //         if (peerConnectionRef.current) {
+    //             peerConnectionRef.current.close();
+    //         }
+    //         socket.off("ready", handleReady);
+    //         socket.off("offer", handleOffer);
+    //         socket.off("answer", handleAnswer);
+    //         socket.off("ice-candidate", handleIceCandidate);
+    //         socket.off("user-joined", handleUserJoined);
+    //         socket.off("room-full", handleRoomFull);
+    //         socket.off("user-disconnected", handleUserDisconnected);
+    //     };
+    // }, [socket, roomId, router, hasJoined, mediaStreamReady]);
     useEffect(() => {
         if (!hasJoined || !socket || !mediaStreamReady) return;
 
         setCallStatus("Connecting to room...");
 
-        const joinRoom = () => {
-            // socket.emit("join-room", roomId);
-            socket.emit("join-room", { roomId, userName });
-        };
-
-        if (socket.connected) {
-            joinRoom();
-        } else {
-            const onConnect = () => joinRoom();
-            socket.on("connect", onConnect);
-            return () => socket.off("connect", onConnect);
-        }
-
-        // Setup RTCPeerConnection
+        // ✅ Setup RTCPeerConnection FIRST — always
         peerConnectionRef.current = new RTCPeerConnection({
             iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
@@ -97,28 +211,32 @@ export default function CallRoom() {
             ],
         });
 
+        // Add local tracks to peer connection
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((track) => {
                 peerConnectionRef.current?.addTrack(track, localStreamRef.current!);
             });
         }
 
+        // When remote stream arrives
         peerConnectionRef.current.ontrack = (event) => {
             if (remoteVideoRef.current) {
                 remoteVideoRef.current.srcObject = event.streams[0];
                 setCallStatus("Connected");
                 setRemoteConnected(true);
-                setShowInvitePopup(false); // hide invite popup when someone joins
+                setShowInvitePopup(false);
             }
         };
 
+        // Send ICE candidates to other peer
         peerConnectionRef.current.onicecandidate = (event) => {
             if (event.candidate) {
                 socket.emit("ice-candidate", event.candidate, roomId);
             }
         };
 
-        // Socket listeners
+        // ── Socket Handlers ──────────────────────────────────────
+
         const handleReady = async () => {
             try {
                 const offer = await peerConnectionRef.current?.createOffer();
@@ -157,7 +275,6 @@ export default function CallRoom() {
         };
 
         const handleUserJoined = (joiningUserName: string) => {
-            // setCallStatus("User joined. Negotiating...");
             setRemoteUserName(joiningUserName);
             setCallStatus(`${joiningUserName} joined. Negotiating...`);
         };
@@ -173,20 +290,23 @@ export default function CallRoom() {
             if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
         };
 
+        // ── Register ALL listeners BEFORE joining the room ───────
         socket.on("ready", handleReady);
         socket.on("offer", handleOffer);
         socket.on("answer", handleAnswer);
         socket.on("ice-candidate", handleIceCandidate);
         socket.on("user-joined", handleUserJoined);
-        socket.on("existing-user", (existingUserName: string) => {
-            setRemoteUserName(existingUserName);
-        });
+        socket.on("existing-user", (name: string) => setRemoteUserName(name));
         socket.on("room-full", handleRoomFull);
         socket.on("user-disconnected", handleUserDisconnected);
+
+        // ── Join room LAST — after everything is ready ────────────
+        socket.emit("join-room", { roomId, userName });
 
         return () => {
             if (peerConnectionRef.current) {
                 peerConnectionRef.current.close();
+                peerConnectionRef.current = null;
             }
             socket.off("ready", handleReady);
             socket.off("offer", handleOffer);
