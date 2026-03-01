@@ -8,6 +8,7 @@ export const useSocket = () => {
     useEffect(() => {
         const socket_url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
         const newSocket = io(socket_url, {
+            transports: ["websocket"],
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
