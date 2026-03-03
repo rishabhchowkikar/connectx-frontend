@@ -1,20 +1,24 @@
 "use client";
 
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AuthContext } from "@/context/AuthContext";
 import Link from "next/link";
 
 export default function LoginPage() {
-    const { login, error, clearError } = useContext(AuthContext)!;
+    const { login, error, clearError, user, loading } = useContext(AuthContext)!;
     const router = useRouter();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    // Middleware handles redirects server-side (faster)
-    // No need for client-side redirect logic
+    // Redirect if already logged in (client-side check)
+    useEffect(() => {
+        if (!loading && user) {
+            router.replace("/dashboard");
+        }
+    }, [user, loading, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,10 +27,11 @@ export default function LoginPage() {
 
         try {
             await login(email.trim(), password);
-            router.push("/dashboard");
+            // After successful login, redirect to dashboard
+            // Use window.location for full page reload to ensure cookie is set
+            window.location.href = "/dashboard";
         } catch (err) {
             // error is already set in context
-        } finally {
             setSubmitting(false);
         }
     };
