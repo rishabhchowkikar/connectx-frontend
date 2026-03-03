@@ -9,6 +9,9 @@ export default function Dashboard() {
     const router = useRouter();
     const [roomIdInput, setRoomIdInput] = useState("");
 
+    // Middleware handles authentication check server-side (faster)
+    // No need for client-side redirect logic
+
     const createRoom = () => {
         const newRoom = uuidv4();
         router.push(`/call/${newRoom}`);

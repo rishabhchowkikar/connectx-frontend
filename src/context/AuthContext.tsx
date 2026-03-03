@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useState, useEffect, ReactNode } from "react";
-import { jwtDecode } from "jwt-decode";
 import axios from "axios";
 
 interface User {
@@ -22,12 +21,12 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// const API_BASE = "http://localhost:5001"; // ← your backend port
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
-// Create axios instance with baseURL
+// Create axios instance with baseURL and credentials for cookie-based auth
 const api = axios.create({
     baseURL: API_BASE,
+    withCredentials: true
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -35,42 +34,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // ✅ Check authentication status via cookie-based /api/auth/me endpoint
     useEffect(() => {
-        const token = localStorage.getItem("token");
-
-        if (token) {
+        const checkUser = async () => {
             try {
-                const decoded: any = jwtDecode(token);
-                if (decoded.exp * 1000 > Date.now()) {
-                    setUser({
-                        id: decoded.id,
-                        name: decoded.name || "User",
-                        email: decoded.email || "",
-                    });
-                } else {
-                    localStorage.removeItem("token");
-                }
+                const res = await api.get("/api/auth/me");
+                setUser(res.data);
             } catch (err) {
-                console.error("Token decode failed", err);
-                localStorage.removeItem("token");
+                setUser(null);
+            } finally {
+                setLoading(false);
             }
-        }
-        setLoading(false);
+        };
+        checkUser();
     }, []);
 
     const register = async (name: string, email: string, password: string) => {
         setError(null);
         try {
             const res = await api.post("/api/auth/register", { name, email, password });
-            const { token } = res.data;
-            localStorage.setItem("token", token);
-
-            const decoded: any = jwtDecode(token);
-            setUser({
-                id: decoded.id,
-                name: decoded.name || name,
-                email: decoded.email || email,
-            });
+            // Backend sets cookie automatically, just update user from response
+            setUser(res.data.user);
         } catch (err: any) {
             const msg = err.response?.data?.msg || "Registration failed. Try again.";
             setError(msg);
@@ -82,15 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(null);
         try {
             const res = await api.post("/api/auth/login", { email, password });
-            const { token } = res.data;
-            localStorage.setItem("token", token);
-
-            const decoded: any = jwtDecode(token);
-            setUser({
-                id: decoded.id,
-                name: decoded.name || "User",
-                email: decoded.email || email,
-            });
+            // Backend sets cookie automatically, just update user from response
+            setUser(res.data.user);
         } catch (err: any) {
             const msg = err.response?.data?.msg || "Invalid email or password";
             setError(msg);
@@ -98,10 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const logout = () => {
-        localStorage.removeItem("token");
-        setUser(null);
-        setError(null);
+    const logout = async () => {
+        try {
+            await api.post("/api/auth/logout");
+        } catch (err) {
+            console.error("Logout error", err);
+        } finally {
+            setUser(null);
+            setError(null);
+        }
     };
 
     const clearError = () => setError(null);
@@ -114,3 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         </AuthContext.Provider>
     );
 }
+
+export const useAuth = () => {
+    const context = React.useContext(AuthContext);
+    if (!context) throw new Error("useAuth must be used within an AuthProvider");
+    return context;
+};

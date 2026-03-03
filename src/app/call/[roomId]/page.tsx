@@ -13,6 +13,9 @@ export default function CallRoom() {
     const auth = useContext(AuthContext);
     const userName = auth?.user?.name || "Guest";
 
+    // Middleware handles authentication check server-side (faster)
+    // No need for client-side redirect logic
+
     const localVideoRef = useRef<HTMLVideoElement>(null);
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
     const peerConnectionRef = useRef<RTCPeerConnection | null>(null);

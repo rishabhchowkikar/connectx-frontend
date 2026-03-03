@@ -1,17 +1,9 @@
 import axios from "axios";
 
 const api = axios.create({
-    // baseURL: "http://localhost:5001",
-    // baseURL: "https://c0dz0xln-5001.inc1.devtunnels.ms"
     baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001",
+    withCredentials: true, // Enable cookie-based authentication
 });
 
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-        config.headers["x-auth-token"] = token;
-    }
-    return config;
-});
-
+// No need for token interceptor - cookies are sent automatically with withCredentials: true
 export default api;

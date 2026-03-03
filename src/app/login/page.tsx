@@ -1,24 +1,20 @@
 "use client";
 
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { AuthContext } from "@/context/AuthContext";
 import Link from "next/link";
 
 export default function LoginPage() {
-    const { login, user, loading, error, clearError } = useContext(AuthContext)!;
+    const { login, error, clearError } = useContext(AuthContext)!;
     const router = useRouter();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    // Redirect if already logged in
-    useEffect(() => {
-        if (!loading && user) {
-            router.replace("/dashboard");
-        }
-    }, [user, loading, router]);
+    // Middleware handles redirects server-side (faster)
+    // No need for client-side redirect logic
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,14 +31,7 @@ export default function LoginPage() {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-                <div className="text-xl font-medium text-indigo-700 animate-pulse">Loading...</div>
-            </div>
-        );
-    }
-
+    // Middleware handles auth redirects, so we can show the form immediately
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-4">
             <div className="w-full max-w-md bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-gray-100">
