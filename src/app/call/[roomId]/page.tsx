@@ -11,10 +11,25 @@ export default function CallRoom() {
     const router = useRouter();
     const socket = useSocket();
     const auth = useContext(AuthContext);
-    const userName = auth?.user?.name || "Guest";
+    
+    // Wait for auth to finish loading before determining userName
+    // Only default to "Guest" if loading is complete and user is still null
+    const userName = auth?.loading ? "Loading..." : (auth?.user?.name || "Guest");
 
     // Middleware handles authentication check server-side (faster)
     // No need for client-side redirect logic
+
+    // Debug: Log auth state in production
+    useEffect(() => {
+        if (process.env.NODE_ENV === 'production') {
+            console.log("Call Room Auth State:", {
+                user: auth?.user,
+                loading: auth?.loading,
+                userName: userName,
+                apiBase: process.env.NEXT_PUBLIC_API_URL
+            });
+        }
+    }, [auth, userName]);
 
     const localVideoRef = useRef<HTMLVideoElement>(null);
     const remoteVideoRef = useRef<HTMLVideoElement>(null);

@@ -25,9 +25,14 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 // Create axios instance with baseURL and credentials for cookie-based auth
 const api = axios.create({
-    baseURL: API_BASE,
+    baseURL: API_BASE || 'http://localhost:5001', // Fallback for development
     withCredentials: true
 });
+
+// Log API base in production for debugging
+if (process.env.NODE_ENV === 'production' && !API_BASE) {
+    console.error("⚠️ NEXT_PUBLIC_API_URL is not set in production! API calls will fail.");
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -38,9 +43,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const checkUser = async () => {
             try {
+                // Check if API_BASE is configured
+                if (!API_BASE) {
+                    console.error("NEXT_PUBLIC_API_URL is not set! Please configure it in your environment variables.");
+                    setUser(null);
+                    setLoading(false);
+                    return;
+                }
+
                 const res = await api.get("/api/auth/me");
-                setUser(res.data);
-            } catch (err) {
+                if (res.data && res.data.name) {
+                    setUser(res.data);
+                } else {
+                    console.warn("Auth response missing user data:", res.data);
+                    setUser(null);
+                }
+            } catch (err: any) {
+                // Log errors for debugging (especially in production)
+                console.error("Auth check failed:", {
+                    message: err.message,
+                    response: err.response?.data,
+                    status: err.response?.status,
+                    apiBase: API_BASE,
+                    url: err.config?.url
+                });
                 setUser(null);
             } finally {
                 setLoading(false);
