@@ -3,7 +3,7 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/hooks/useSocket"; // ← Import your new hook
-import { Copy, X, Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
+import { Copy, X, Mic, MicOff, Video, VideoOff, PhoneOff, Info } from "lucide-react";
 import { AuthContext } from "@/context/AuthContext";
 
 export default function CallRoom() {
@@ -11,8 +11,8 @@ export default function CallRoom() {
     const router = useRouter();
     const socket = useSocket();
     const auth = useContext(AuthContext);
-    const {user,loading} = auth || {}
-    
+    const { user, loading } = auth || {}
+
     // Wait for auth to finish loading before determining userName
     // Only default to "Guest" if loading is complete and user is still null
     const userName = auth?.loading ? "Loading..." : (auth?.user?.name || "Guest");
@@ -37,8 +37,8 @@ export default function CallRoom() {
         }
     }, [user, loading, userName]);
 
-     // Show loading state while checking auth
-     if (loading) {
+    // Show loading state while checking auth
+    if (loading) {
         return (
             <div className="min-h-screen bg-[#101115] flex items-center justify-center">
                 <div className="text-xl font-medium text-white animate-pulse">Loading...</div>
@@ -67,6 +67,38 @@ export default function CallRoom() {
     const [mediaStreamReady, setMediaStreamReady] = useState(false);
     const [remoteUserName, setRemoteUserName] = useState("Waiting...");
 
+    const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+    const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+    const [selectedVideoId, setSelectedVideoId] = useState<string>("");
+    const [selectedAudioId, setSelectedAudioId] = useState<string>("");
+    const [showDevicePicker, setShowDevicePicker] = useState(false);
+    const [showControls, setShowControls] = useState(true);
+    const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Auto-hide controls after 30 seconds of inactivity
+    useEffect(() => {
+        const handleMouseMove = () => {
+            setShowControls(true);
+            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            controlsTimeoutRef.current = setTimeout(() => {
+                // Only hide if pickers/popups are not open
+                if (!showDevicePicker && !showInvitePopup) {
+                    setShowControls(false);
+                }
+            }, 30000); // 30 seconds as requested
+        };
+
+        if (hasJoined) {
+            window.addEventListener("mousemove", handleMouseMove);
+            handleMouseMove(); // Initialize timer
+        }
+
+        return () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+        };
+    }, [hasJoined, showDevicePicker, showInvitePopup]);
+
     // 1. Initialize local media immediately (for the preview screen)
     useEffect(() => {
         const initMedia = async () => {
@@ -84,6 +116,15 @@ export default function CallRoom() {
 
                 setMediaStreamReady(true);
                 setCallStatus("Ready to join");
+
+                // Load available devices
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cameras = devices.filter(d => d.kind === "videoinput");
+                const mics = devices.filter(d => d.kind === "audioinput");
+                setVideoDevices(cameras);
+                setAudioDevices(mics);
+                setSelectedVideoId(cameras[0]?.deviceId || "");
+                setSelectedAudioId(mics[0]?.deviceId || "");
             } catch (err: any) {
                 console.error("Camera error:", err);
                 setCallStatus(`Camera error: ${err.message}`);
@@ -108,133 +149,6 @@ export default function CallRoom() {
     }, [hasJoined]);
 
     // 3. Socket signaling logic ONLY AFTER hasJoined is true
-    // useEffect(() => {
-    //     if (!hasJoined || !socket || !mediaStreamReady) return;
-
-    //     setCallStatus("Connecting to room...");
-
-    //     const joinRoom = () => {
-    //         // socket.emit("join-room", roomId);
-    //         socket.emit("join-room", { roomId, userName });
-    //     };
-
-    //     if (socket.connected) {
-    //         joinRoom();
-    //     } else {
-    //         const onConnect = () => joinRoom();
-    //         socket.on("connect", onConnect);
-    //         return () => socket.off("connect", onConnect);
-    //     }
-
-    //     // Setup RTCPeerConnection
-    //     peerConnectionRef.current = new RTCPeerConnection({
-    //         iceServers: [
-    //             { urls: "stun:stun.l.google.com:19302" },
-    //             { urls: "stun:stun1.l.google.com:19302" },
-    //             { urls: "stun:stun2.l.google.com:19302" },
-    //         ],
-    //     });
-
-    //     if (localStreamRef.current) {
-    //         localStreamRef.current.getTracks().forEach((track) => {
-    //             peerConnectionRef.current?.addTrack(track, localStreamRef.current!);
-    //         });
-    //     }
-
-    //     peerConnectionRef.current.ontrack = (event) => {
-    //         if (remoteVideoRef.current) {
-    //             remoteVideoRef.current.srcObject = event.streams[0];
-    //             setCallStatus("Connected");
-    //             setRemoteConnected(true);
-    //             setShowInvitePopup(false); // hide invite popup when someone joins
-    //         }
-    //     };
-
-    //     peerConnectionRef.current.onicecandidate = (event) => {
-    //         if (event.candidate) {
-    //             socket.emit("ice-candidate", event.candidate, roomId);
-    //         }
-    //     };
-
-    //     // Socket listeners
-    //     const handleReady = async () => {
-    //         try {
-    //             const offer = await peerConnectionRef.current?.createOffer();
-    //             await peerConnectionRef.current?.setLocalDescription(offer);
-    //             socket.emit("offer", offer, roomId);
-    //         } catch (err) {
-    //             console.error("Offer creation failed:", err);
-    //         }
-    //     };
-
-    //     const handleOffer = async (offer: any) => {
-    //         try {
-    //             await peerConnectionRef.current?.setRemoteDescription(offer);
-    //             const answer = await peerConnectionRef.current?.createAnswer();
-    //             await peerConnectionRef.current?.setLocalDescription(answer);
-    //             socket.emit("answer", answer, roomId);
-    //         } catch (err) {
-    //             console.error("Answer failed:", err);
-    //         }
-    //     };
-
-    //     const handleAnswer = async (answer: any) => {
-    //         try {
-    //             await peerConnectionRef.current?.setRemoteDescription(answer);
-    //         } catch (err) {
-    //             console.error("Set remote answer failed:", err);
-    //         }
-    //     };
-
-    //     const handleIceCandidate = async (candidate: any) => {
-    //         try {
-    //             await peerConnectionRef.current?.addIceCandidate(candidate);
-    //         } catch (err) {
-    //             console.error("Add ICE candidate failed:", err);
-    //         }
-    //     };
-
-    //     const handleUserJoined = (joiningUserName: string) => {
-    //         // setCallStatus("User joined. Negotiating...");
-    //         setRemoteUserName(joiningUserName);
-    //         setCallStatus(`${joiningUserName} joined. Negotiating...`);
-    //     };
-
-    //     const handleRoomFull = () => {
-    //         alert("Room is full (max 2 users)");
-    //         router.push("/dashboard");
-    //     };
-
-    //     const handleUserDisconnected = () => {
-    //         setCallStatus("Other user disconnected");
-    //         setRemoteConnected(false);
-    //         if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-    //     };
-
-    //     socket.on("ready", handleReady);
-    //     socket.on("offer", handleOffer);
-    //     socket.on("answer", handleAnswer);
-    //     socket.on("ice-candidate", handleIceCandidate);
-    //     socket.on("user-joined", handleUserJoined);
-    //     socket.on("existing-user", (existingUserName: string) => {
-    //         setRemoteUserName(existingUserName);
-    //     });
-    //     socket.on("room-full", handleRoomFull);
-    //     socket.on("user-disconnected", handleUserDisconnected);
-
-    //     return () => {
-    //         if (peerConnectionRef.current) {
-    //             peerConnectionRef.current.close();
-    //         }
-    //         socket.off("ready", handleReady);
-    //         socket.off("offer", handleOffer);
-    //         socket.off("answer", handleAnswer);
-    //         socket.off("ice-candidate", handleIceCandidate);
-    //         socket.off("user-joined", handleUserJoined);
-    //         socket.off("room-full", handleRoomFull);
-    //         socket.off("user-disconnected", handleUserDisconnected);
-    //     };
-    // }, [socket, roomId, router, hasJoined, mediaStreamReady]);
     useEffect(() => {
         if (!hasJoined || !socket || !mediaStreamReady) return;
 
@@ -439,6 +353,57 @@ export default function CallRoom() {
         alert("Link copied to clipboard!");
     };
 
+    const switchDevice = async (deviceId: string, kind: "video" | "audio") => {
+        try {
+            const constraints: MediaStreamConstraints = {
+                video: kind === "video" ? { deviceId: { exact: deviceId } } : { deviceId: { exact: selectedVideoId } },
+                audio: kind === "audio" ? { deviceId: { exact: deviceId } } : { deviceId: { exact: selectedAudioId } },
+            };
+
+            const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+            // Update selected device state
+            if (kind === "video") setSelectedVideoId(deviceId);
+            if (kind === "audio") setSelectedAudioId(deviceId);
+
+            // Replace track in peer connection
+            const newTrack = kind === "video"
+                ? newStream.getVideoTracks()[0]
+                : newStream.getAudioTracks()[0];
+
+            if (peerConnectionRef.current) {
+                const senders = peerConnectionRef.current.getSenders();
+                const sender = senders.find(s => s.track?.kind === kind);
+                if (sender) {
+                    await sender.replaceTrack(newTrack);
+                }
+            }
+
+            // Update local stream
+            if (localStreamRef.current) {
+                const tracks = kind === "video"
+                    ? localStreamRef.current.getVideoTracks()
+                    : localStreamRef.current.getAudioTracks();
+
+                const oldTrack = tracks[0];
+                if (oldTrack) {
+                    oldTrack.stop();
+                    localStreamRef.current.removeTrack(oldTrack);
+                }
+                localStreamRef.current.addTrack(newTrack);
+            }
+
+            // Update local video preview
+            if (kind === "video" && localVideoRef.current) {
+                localVideoRef.current.srcObject = localStreamRef.current;
+            }
+
+            setShowDevicePicker(false);
+        } catch (err) {
+            console.error("Failed to switch device:", err);
+        }
+    };
+
 
     // ======================================
     // UI STREAM: PREVIEW (BEFORE JOINING)
@@ -530,112 +495,177 @@ export default function CallRoom() {
     // UI STREAM: IN CALL
     // ======================================
     return (
-        <div className="relative h-screen bg-[#202124] overflow-hidden flex flex-col">
-        {/* Top Left Status */}
-        <div className="absolute top-4 left-6 flex items-center gap-4 z-20">
-            <div className="bg-black/60 text-white px-5 py-2 rounded-lg text-sm font-medium backdrop-blur-md border border-white/10 shadow-sm">
-                {callStatus}
+        <div className="relative h-screen bg-[#1a1b1e] overflow-hidden flex flex-col p-2 sm:p-4">
+            {/* Top Left Status */}
+            <div className={`absolute top-6 left-8 flex items-center gap-4 z-20 transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                <div className="bg-black/60 text-white px-5 py-2 rounded-lg text-sm font-medium backdrop-blur-md border border-white/10 shadow-sm">
+                    {callStatus}
+                </div>
             </div>
-        </div>
 
-        {/* Video Container */}
-        <div className="flex-1 w-full relative">
+            {/* Video Container - Responsive padding and rounded corners */}
+            <div className="flex-1 w-full relative bg-[#101115] rounded-3xl overflow-hidden shadow-2xl border border-gray-800">
 
-            {/* ✅ ALWAYS rendered — hidden/shown via CSS not conditional render */}
-            <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className={`absolute inset-0 w-full h-full object-cover ${remoteConnected ? "block" : "hidden"}`}
-            />
+                {/* ✅ ALWAYS rendered — hidden/shown via CSS not conditional render */}
+                <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    className={`absolute inset-0 w-full h-full object-cover ${remoteConnected ? "block" : "hidden"}`}
+                />
 
-            {/* Waiting state */}
-            {!remoteConnected && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="flex flex-col items-center">
-                        <div className="w-32 h-32 rounded-full border border-gray-700 flex items-center justify-center animate-pulse bg-gray-800/30 mb-6">
-                            <div className="text-gray-400 font-medium text-lg">Waiting</div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {remoteConnected && remoteUserName !== "Waiting..." && (
-                <div className="absolute bottom-6 left-6 bg-black/60 text-white text-sm px-3 py-1.5 rounded-md backdrop-blur-md z-10">
-                    {remoteUserName}
-                </div>
-            )}
-
-            {/* Local PIP Video */}
-            <div className="absolute top-4 right-4 z-20 transition-all duration-300">
-                <div className="relative w-64 aspect-video rounded-xl border-2 border-gray-600 shadow-2xl overflow-hidden bg-gray-900 group">
-                    <video
-                        ref={localVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className={`w-full h-full object-cover transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
-                    />
-                    {isCameraOff && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-0">
-                            <div className="w-14 h-14 rounded-full bg-blue-500 shadow-lg flex items-center justify-center">
-                                <span className="text-2xl text-white font-medium">{userName.charAt(0).toUpperCase()}</span>
+                {/* Waiting state */}
+                {!remoteConnected && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="flex flex-col items-center">
+                            <div className="w-32 h-32 rounded-full border border-gray-700 flex items-center justify-center animate-pulse bg-gray-800/30 mb-6">
+                                <div className="text-gray-400 font-medium text-lg">Waiting</div>
                             </div>
                         </div>
-                    )}
-                    <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-md z-10">
-                        You
+                    </div>
+                )}
+
+                {remoteConnected && remoteUserName !== "Waiting..." && (
+                    <div className="absolute bottom-6 left-6 bg-black/60 text-white text-sm px-3 py-1.5 rounded-md backdrop-blur-md z-10 sm:block hidden">
+                        {remoteUserName}
+                    </div>
+                )}
+
+                {/* Local PIP Video - Optimized for mobile/desktop */}
+                <div className="absolute top-4 right-4 z-20 transition-all duration-300">
+                    <div className="relative w-32 sm:w-64 aspect-[3/4] sm:aspect-video rounded-xl border-2 border-gray-600 shadow-2xl overflow-hidden bg-gray-900 group">
+                        <video
+                            ref={localVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className={`w-full h-full object-cover transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
+                        />
+                        {isCameraOff && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-0">
+                                <div className="w-14 h-14 rounded-full bg-blue-500 shadow-lg flex items-center justify-center">
+                                    <span className="text-2xl text-white font-medium">{userName.charAt(0).toUpperCase()}</span>
+                                </div>
+                            </div>
+                        )}
+                        <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-md z-10">
+                            You
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        {/* Invite Popup Floating over UI */}
-        {!remoteConnected && showInvitePopup && (
-            <div className="absolute bottom-24 left-6 bg-white rounded-lg shadow-2xl p-6 w-[360px] z-30 animate-in slide-in-from-bottom-4 duration-300">
-                <div className="flex justify-between items-start mb-4">
-                    <h2 className="text-gray-900 font-medium text-lg">Your meeting's ready</h2>
-                    <button onClick={() => setShowInvitePopup(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
+            {/* Invite Popup Floating over UI - Responsive size */}
+            {showInvitePopup && (
+                <div className="absolute bottom-28 left-6 right-6 sm:right-auto bg-white rounded-xl shadow-2xl p-5 sm:w-[360px] z-30 animate-in slide-in-from-bottom-4 duration-300 border border-gray-200">
+                    <div className="flex justify-between items-start mb-3">
+                        <h2 className="text-gray-900 font-bold text-base sm:text-lg">Your meeting's ready</h2>
+                        <button onClick={() => setShowInvitePopup(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <p className="text-gray-600 text-xs sm:text-sm mb-4">
+                        Share this meeting link with others you want in the meeting.
+                    </p>
+                    <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-between mb-2 border border-gray-200">
+                        <span className="text-xs sm:text-sm font-medium text-gray-700 truncate mr-3">
+                            {typeof window !== 'undefined' ? `${window.location.origin}/call/${roomId}` : ''}
+                        </span>
+                        <button onClick={copyInviteLink} className="text-blue-600 hover:text-blue-700 transition-colors bg-white border border-gray-200 p-2 shrink-0 rounded-md shadow-sm">
+                            <Copy className="w-4 h-4 sm:w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
-                <p className="text-gray-600 text-sm mb-4">
-                    Share this meeting link with others you want in the meeting.
-                </p>
-                <div className="bg-gray-100 rounded-md p-3 flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700 truncate mr-3">
-                        {typeof window !== 'undefined' ? `${window.location.origin}/call/${roomId}` : ''}
-                    </span>
-                    <button onClick={copyInviteLink} className="text-gray-500 hover:text-gray-800 transition-colors bg-transparent border-none p-2 shrink-0 rounded hover:bg-gray-200">
-                        <Copy className="w-5 h-5" />
-                    </button>
-                </div>
+            )}
+
+            {/* Bottom Controls Bar - Auto-hide logic applied */}
+            <div className={`h-24 bg-transparent flex items-center justify-center gap-3 sm:gap-5 z-20 shrink-0 relative transition-all duration-500 ${showControls ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"}`}>
+
+                {/* Device Picker Popup - Responsive */}
+                {showDevicePicker && (
+                    <div className="absolute bottom-24 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-[#2d2d30] border border-gray-700 rounded-2xl shadow-2xl p-4 sm:w-80 z-50">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-white font-semibold text-sm">Media Settings</h3>
+                            <button onClick={() => setShowDevicePicker(false)} className="sm:hidden text-gray-400"><X className="w-4 h-4" /></button>
+                        </div>
+
+                        <h3 className="text-gray-400 font-medium text-[10px] uppercase tracking-wider mb-2">Camera</h3>
+                        <div className="flex flex-col gap-1.5 mb-5 max-h-32 overflow-y-auto custom-scrollbar">
+                            {videoDevices.map(device => (
+                                <button
+                                    key={device.deviceId}
+                                    onClick={() => switchDevice(device.deviceId, "video")}
+                                    className={`text-left px-3 py-2 rounded-lg text-xs sm:text-sm transition-all ${selectedVideoId === device.deviceId
+                                        ? "bg-blue-600 text-white shadow-lg"
+                                        : "text-gray-300 hover:bg-gray-700"
+                                        }`}
+                                >
+                                    📷 {device.label || `Camera ${videoDevices.indexOf(device) + 1}`}
+                                </button>
+                            ))}
+                        </div>
+
+                        <h3 className="text-gray-400 font-medium text-[10px] uppercase tracking-wider mb-2">Microphone</h3>
+                        <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                            {audioDevices.map(device => (
+                                <button
+                                    key={device.deviceId}
+                                    onClick={() => switchDevice(device.deviceId, "audio")}
+                                    className={`text-left px-3 py-2 rounded-lg text-xs sm:text-sm transition-all ${selectedAudioId === device.deviceId
+                                        ? "bg-blue-600 text-white shadow-lg"
+                                        : "text-gray-300 hover:bg-gray-700"
+                                        }`}
+                                >
+                                    🎤 {device.label || `Mic ${audioDevices.indexOf(device) + 1}`}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <button
+                    onClick={toggleMute}
+                    className={`p-3 sm:p-4 rounded-full transition-all border ${isMuted ? "bg-[#ea4335] border-transparent hover:bg-red-600 text-white" : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"}`}
+                >
+                    {isMuted ? <MicOff className="w-5 h-5 sm:w-6 h-6" /> : <Mic className="w-5 h-5 sm:w-6 h-6" />}
+                </button>
+
+                <button
+                    onClick={toggleCamera}
+                    className={`p-3 sm:p-4 rounded-full transition-all border ${isCameraOff ? "bg-[#ea4335] border-transparent hover:bg-red-600 text-white" : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"}`}
+                >
+                    {isCameraOff ? <VideoOff className="w-5 h-5 sm:w-6 h-6" /> : <Video className="w-5 h-5 sm:w-6 h-6" />}
+                </button>
+
+                {/* Device switcher button */}
+                <button
+                    onClick={() => setShowDevicePicker(!showDevicePicker)}
+                    className={`p-3 sm:p-4 rounded-full transition-all border ${showDevicePicker ? "bg-blue-600 border-transparent text-white shadow-blue-500/20" : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"}`}
+                    title="Switch camera / microphone"
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 sm:w-6 h-6">
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+                    </svg>
+                </button>
+
+                {/* Info / Share toggle button */}
+                <button
+                    onClick={() => setShowInvitePopup(!showInvitePopup)}
+                    className={`p-3 sm:p-4 rounded-full transition-all border ${showInvitePopup ? "bg-blue-600 border-transparent text-white" : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"}`}
+                    title="Meeting details"
+                >
+                    <Info className="w-5 h-5 sm:w-6 h-6" />
+                </button>
+
+                <button
+                    onClick={handleEndCall}
+                    className="p-3 sm:p-4 sm:px-6 bg-[#ea4335] hover:bg-red-600 text-white font-medium rounded-full transition-all shadow-xl sm:ml-3 border border-transparent flex items-center gap-2"
+                >
+                    <PhoneOff className="w-5 h-5 sm:w-6 h-6" />
+                    <span className="hidden sm:inline">End</span>
+                </button>
             </div>
-        )}
-
-        {/* Bottom Controls Bar */}
-        <div className="h-24 bg-[#202124] flex items-center justify-center gap-5 z-20 shrink-0 border-t border-gray-800">
-            <button
-                onClick={toggleMute}
-                className={`p-4 rounded-full transition-all border ${isMuted ? "bg-[#ea4335] border-transparent hover:bg-red-600 text-white" : "bg-[#3c4043] border-gray-600 hover:bg-[#4d5155] text-white shadow-md"}`}
-            >
-                {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-            </button>
-
-            <button
-                onClick={toggleCamera}
-                className={`p-4 rounded-full transition-all border ${isCameraOff ? "bg-[#ea4335] border-transparent hover:bg-red-600 text-white" : "bg-[#3c4043] border-gray-600 hover:bg-[#4d5155] text-white shadow-md"}`}
-            >
-                {isCameraOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
-            </button>
-
-            <button
-                onClick={handleEndCall}
-                className="p-4 px-6 bg-[#ea4335] hover:bg-red-600 text-white font-medium rounded-full transition-all shadow-lg ml-3 border border-transparent flex items-center gap-2"
-            >
-                <PhoneOff className="w-6 h-6" />
-            </button>
         </div>
-    </div>
     );
 }
