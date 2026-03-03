@@ -109,6 +109,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
             setUser(null);
             setError(null);
+            // Redirect to login after logout
+            if (typeof window !== 'undefined') {
+                window.location.href = "/login";
+            }
         }
     };
 

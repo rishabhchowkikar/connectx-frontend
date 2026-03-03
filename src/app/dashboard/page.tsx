@@ -1,16 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useContext, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { Video, Keyboard, ArrowRight } from "lucide-react";
+import { AuthContext } from "@/context/AuthContext";
 
 export default function Dashboard() {
     const router = useRouter();
+    const { user, loading } = useContext(AuthContext)!;
     const [roomIdInput, setRoomIdInput] = useState("");
 
-    // Middleware handles authentication check server-side (faster)
-    // No need for client-side redirect logic
+    // Redirect to login if not authenticated
+    useEffect(() => {
+        if (!loading && !user) {
+            router.replace("/login");
+        }
+    }, [user, loading, router]);
 
     const createRoom = () => {
         const newRoom = uuidv4();
@@ -23,6 +29,20 @@ export default function Dashboard() {
             router.push(`/call/${trimmed}`);
         }
     };
+
+    // Show loading state while checking auth
+    if (loading) {
+        return (
+            <div className="min-h-full w-full bg-slate-50 flex items-center justify-center">
+                <div className="text-xl font-medium text-slate-700 animate-pulse">Loading...</div>
+            </div>
+        );
+    }
+
+    // Don't render if not authenticated (will redirect)
+    if (!user) {
+        return null;
+    }
 
     return (
         <div className="min-h-full w-full bg-slate-50 flex flex-col font-sans">
