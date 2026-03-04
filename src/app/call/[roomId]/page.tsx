@@ -1000,10 +1000,36 @@ export default function CallRoom() {
         alert("Link copied to clipboard!");
     };
 
-    // ✅ FIX 2: Correct order — get new track FIRST, stop old AFTER
+    // ✅ FIX 2: Mobile-friendly order — stop old FIRST, then get new
     const switchDevice = async (deviceId: string, kind: "video" | "audio") => {
         try {
-            // Step 1: Get new stream FIRST — before stopping anything
+            // ✅ Step 1: Stop old track FIRST on mobile (can't open 2 cameras at once)
+            if (kind === "video" && localStreamRef.current) {
+                const oldVideoTracks = localStreamRef.current.getVideoTracks();
+                oldVideoTracks.forEach(track => {
+                    track.stop(); // release camera hardware immediately
+                    localStreamRef.current!.removeTrack(track);
+                });
+
+                // Hide video element while switching — shows avatar instead
+                if (localVideoRef.current) {
+                    localVideoRef.current.srcObject = null;
+                }
+                setIsCameraOff(true); // show avatar placeholder during switch
+            }
+
+            if (kind === "audio" && localStreamRef.current) {
+                const oldAudioTracks = localStreamRef.current.getAudioTracks();
+                oldAudioTracks.forEach(track => {
+                    track.stop();
+                    localStreamRef.current!.removeTrack(track);
+                });
+            }
+
+            // ✅ Step 2: Small delay so hardware fully releases (critical on Android)
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            // ✅ Step 3: Now request new device — hardware is free
             const newStream = await navigator.mediaDevices.getUserMedia(
                 kind === "video"
                     ? { video: { deviceId: { exact: deviceId } } }
@@ -1016,10 +1042,16 @@ export default function CallRoom() {
 
             if (!newTrack) {
                 console.error("No track found in new stream");
+                if (kind === "video") setIsCameraOff(false); // restore on error
                 return;
             }
 
-            // Step 2: Replace in peer connection while old track still active
+            // ✅ Step 4: Add new track to local stream
+            if (localStreamRef.current) {
+                localStreamRef.current.addTrack(newTrack);
+            }
+
+            // ✅ Step 5: Replace in peer connection (critical for remote peer)
             if (peerConnectionRef.current) {
                 const sender = peerConnectionRef.current
                     .getSenders()
@@ -1027,35 +1059,23 @@ export default function CallRoom() {
                 if (sender) {
                     await sender.replaceTrack(newTrack);
                     console.log(`✅ ${kind} track replaced in peer connection`);
+                } else {
+                    console.warn(`No ${kind} sender found in peer connection`);
                 }
             }
 
-            // Step 3: NOW stop old track AFTER new one is active
-            if (localStreamRef.current) {
-                const oldTracks = kind === "video"
-                    ? localStreamRef.current.getVideoTracks()
-                    : localStreamRef.current.getAudioTracks();
-
-                oldTracks.forEach(track => {
-                    track.stop();
-                    localStreamRef.current!.removeTrack(track);
-                });
-
-                localStreamRef.current.addTrack(newTrack);
-            }
-
-            // Step 4: Force video element update with delay for mobile hardware
+            // ✅ Step 6: Re-attach stream to video element
             if (kind === "video" && localVideoRef.current) {
-                localVideoRef.current.srcObject = null;
-                await new Promise(resolve => setTimeout(resolve, 50)); // mobile needs this
                 localVideoRef.current.srcObject = localStreamRef.current;
                 try {
                     await localVideoRef.current.play();
                 } catch (e) {
                     console.warn("Play failed:", e);
                 }
+                setIsCameraOff(false); // show video again
             }
 
+            // ✅ Step 7: Update selected device state
             if (kind === "video") setSelectedVideoId(deviceId);
             if (kind === "audio") setSelectedAudioId(deviceId);
 
@@ -1064,6 +1084,14 @@ export default function CallRoom() {
 
         } catch (err: any) {
             console.error(`❌ Failed to switch ${kind}:`, err.name, err.message);
+            // Restore camera state on error
+            if (kind === "video") {
+                setIsCameraOff(false);
+                // Try to restore previous video if possible
+                if (localVideoRef.current && localStreamRef.current) {
+                    localVideoRef.current.srcObject = localStreamRef.current;
+                }
+            }
             alert(`Could not switch ${kind}: ${err.message}`);
         }
     };
