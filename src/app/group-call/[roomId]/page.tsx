@@ -31,12 +31,7 @@ function RemoteVideoTile({ participant }: { participant: Participant }) {
     return (
         <div className="relative bg-[#1e1f22] rounded-2xl overflow-hidden flex items-center justify-center border border-white/5 aspect-video">
             {participant.stream ? (
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full h-full object-cover"
-                />
+                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
             ) : (
                 <div className="flex flex-col items-center gap-2">
                     <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center animate-pulse">
@@ -57,9 +52,7 @@ function RemoteVideoTile({ participant }: { participant: Participant }) {
 // ─── Grid layout ──────────────────────────────────────────────────────────────
 function getGridClass(total: number) {
     if (total === 1) return "grid-cols-1 max-w-3xl mx-auto";
-    if (total === 2) return "grid-cols-2";
     if (total <= 4) return "grid-cols-2";
-    if (total <= 6) return "grid-cols-3";
     if (total <= 9) return "grid-cols-3";
     return "grid-cols-4";
 }
@@ -82,7 +75,11 @@ export default function GroupCallRoom() {
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
     const [mediaStreamReady, setMediaStreamReady] = useState(false);
+
+    // ✅ FIX: hasJoined is the socket trigger — roomState only controls which screen to show
+    const [hasJoined, setHasJoined] = useState(false);
     const [roomState, setRoomState] = useState<"preview" | "waiting" | "in-call">("preview");
+
     const [isAdmin, setIsAdmin] = useState(false);
     const [adminName, setAdminName] = useState("");
     const [participants, setParticipants] = useState<Participant[]>([]);
@@ -114,6 +111,7 @@ export default function GroupCallRoom() {
         return () => { localStreamRef.current?.getTracks().forEach(t => t.stop()); };
     }, []);
 
+    // Re-attach stream when screen changes
     useEffect(() => {
         if (localVideoRef.current && localStreamRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
@@ -158,48 +156,66 @@ export default function GroupCallRoom() {
     }, [socket, roomId]);
 
     // ── Socket signaling ──────────────────────────────────────────────────────
+    // ✅ KEY FIX: depends on hasJoined NOT roomState
+    // This effect runs ONCE when user clicks "Join Now" and NEVER re-runs due to roomState changes
+    // So listeners stay alive through preview → waiting → in-call transitions
     useEffect(() => {
-        if (!socket || roomState !== "in-call") return;
+        if (!socket || !hasJoined || !mediaStreamReady) return;
 
+        console.log("🔌 Joining group room:", roomId);
         socket.emit("join-group-room", { roomId, userName });
 
+        // Admin: created room and joined instantly
         socket.on("group-joined", ({ isAdmin: admin }: { isAdmin: boolean }) => {
+            console.log("✅ group-joined, isAdmin:", admin);
             setIsAdmin(admin);
+            setRoomState("in-call");
             setCallStatus(admin ? "Waiting for participants..." : "Connected");
         });
 
+        // Non-admin: put in waiting room
+        // ✅ roomState switches to "waiting" but listeners stay alive
         socket.on("waiting-for-admission", ({ adminName: name }: { adminName: string }) => {
+            console.log("⏳ Waiting for admission from:", name);
             setAdminName(name);
-            setRoomState("waiting");
+            setRoomState("waiting"); // just changes the UI — socket stays connected
         });
 
+        // Non-admin: rejected
         socket.on("group-rejected", () => {
             alert("Your request to join was rejected by the host.");
             router.push("/dashboard/group-calling");
         });
 
+        // Room full
         socket.on("group-room-full", () => {
             alert("This room is full (max 10 participants).");
             router.push("/dashboard/group-calling");
         });
 
+        // ✅ Non-admin: admitted — this fires correctly because listener was never removed
         socket.on("group-admitted", async ({
             participants: existingPeers,
         }: { participants: { socketId: string; userName: string }[]; roomId: string }) => {
-            setRoomState("in-call");
+            console.log("✅ Admitted! Existing peers:", existingPeers.length);
+            setRoomState("in-call"); // switch waiting screen back to call
             setCallStatus("Connected");
             setParticipants(existingPeers.map(p => ({ ...p, stream: undefined })));
         });
 
+        // Admin: someone is waiting
         socket.on("user-waiting", ({ socketId, userName: waitingName }: WaitingUser) => {
+            console.log("👋 User waiting:", waitingName);
             setWaitingUsers(prev => [...prev, { socketId, userName: waitingName }]);
             setShowWaitingPanel(true);
         });
 
+        // Existing peer: new peer joined, create offer to them
         socket.on("group-new-peer", async ({
             socketId: newPeerId,
             userName: newPeerName,
         }: { socketId: string; userName: string }) => {
+            console.log("📞 New peer:", newPeerName, newPeerId);
             setParticipants(prev => [...prev, { socketId: newPeerId, userName: newPeerName }]);
             const pc = createPeerConnection(newPeerId);
             const offer = await pc.createOffer();
@@ -207,9 +223,11 @@ export default function GroupCallRoom() {
             socket.emit("group-offer", { offer, targetId: newPeerId, roomId });
         });
 
+        // Receive offer from existing peer
         socket.on("group-offer", async ({
             offer, fromId,
         }: { offer: RTCSessionDescriptionInit; fromId: string; roomId: string }) => {
+            console.log("📨 Offer from:", fromId);
             let pc = peerConnectionsRef.current.get(fromId);
             if (!pc) pc = createPeerConnection(fromId);
             await pc.setRemoteDescription(offer);
@@ -218,13 +236,16 @@ export default function GroupCallRoom() {
             socket.emit("group-answer", { answer, targetId: fromId, roomId });
         });
 
+        // Receive answer
         socket.on("group-answer", async ({
             answer, fromId,
         }: { answer: RTCSessionDescriptionInit; fromId: string }) => {
+            console.log("📨 Answer from:", fromId);
             const pc = peerConnectionsRef.current.get(fromId);
             if (pc) await pc.setRemoteDescription(answer);
         });
 
+        // Receive ICE candidate
         socket.on("group-ice-candidate", async ({
             candidate, fromId,
         }: { candidate: RTCIceCandidateInit; fromId: string }) => {
@@ -235,12 +256,15 @@ export default function GroupCallRoom() {
             }
         });
 
+        // Peer left
         socket.on("group-peer-left", ({ socketId }: { socketId: string }) => {
+            console.log("👋 Peer left:", socketId);
             const pc = peerConnectionsRef.current.get(socketId);
             if (pc) { pc.close(); peerConnectionsRef.current.delete(socketId); }
             setParticipants(prev => prev.filter(p => p.socketId !== socketId));
         });
 
+        // Admin role transferred
         socket.on("group-you-are-admin", () => {
             setIsAdmin(true);
             setCallStatus("You are now the host");
@@ -262,7 +286,8 @@ export default function GroupCallRoom() {
             peerConnectionsRef.current.forEach(pc => pc.close());
             peerConnectionsRef.current.clear();
         };
-    }, [socket, roomState, roomId, userName, createPeerConnection, router]);
+        // ✅ roomState is NOT in this array — so this never re-runs when screen changes
+    }, [socket, hasJoined, mediaStreamReady, roomId, userName, createPeerConnection, router]);
 
     // ── Admin actions ─────────────────────────────────────────────────────────
     const admitUser = (socketId: string) => {
@@ -330,7 +355,6 @@ export default function GroupCallRoom() {
                             <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1.5 rounded-md text-sm backdrop-blur-md">
                                 You ({userName})
                             </div>
-                            {/* Preview controls */}
                             <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
                                 <button
                                     onClick={toggleMute}
@@ -360,7 +384,10 @@ export default function GroupCallRoom() {
                         </div>
                         {mediaStreamReady ? (
                             <button
-                                onClick={() => setRoomState("in-call")}
+                                onClick={() => {
+                                    setRoomState("in-call");
+                                    setHasJoined(true); // ✅ triggers socket useEffect ONCE
+                                }}
                                 className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 font-semibold rounded-full transition-all text-lg shadow-lg shadow-indigo-900/40"
                             >
                                 Join Now
@@ -418,7 +445,7 @@ export default function GroupCallRoom() {
                         <button onClick={toggleCamera} className={`p-3 rounded-full border ${isCameraOff ? "bg-red-500 border-transparent" : "bg-gray-800 border-gray-700"}`}>
                             {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
                         </button>
-                        <button onClick={() => router.push("/dashboard/group-calling")} className="p-3 rounded-full bg-red-600 border-transparent">
+                        <button onClick={handleEndCall} className="p-3 rounded-full bg-red-600 border-transparent">
                             <PhoneOff className="w-5 h-5" />
                         </button>
                     </div>
@@ -452,11 +479,11 @@ export default function GroupCallRoom() {
                     )}
                 </div>
 
-                {/* Waiting badge */}
+                {/* Waiting badge for admin */}
                 {isAdmin && waitingUsers.length > 0 && (
                     <button
                         onClick={() => setShowWaitingPanel(!showWaitingPanel)}
-                        className="flex items-center gap-2 bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 px-3 py-1.5 rounded-lg text-sm hover:bg-indigo-600/30 transition-all"
+                        className="flex items-center gap-2 bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 px-3 py-1.5 rounded-lg text-sm hover:bg-indigo-600/30 transition-all animate-pulse"
                     >
                         <Users className="w-4 h-4" />
                         {waitingUsers.length} waiting
@@ -539,7 +566,6 @@ export default function GroupCallRoom() {
                                 </div>
                             ))}
                         </div>
-                        {/* Admit all */}
                         {waitingUsers.length > 1 && (
                             <div className="p-3 border-t border-white/5">
                                 <button
@@ -559,22 +585,18 @@ export default function GroupCallRoom() {
                 <button
                     onClick={toggleMute}
                     className={`p-4 rounded-full border transition-all ${isMuted ? "bg-red-500 border-transparent text-white" : "bg-white/5 border-white/10 hover:bg-white/10 text-white"}`}
-                    title={isMuted ? "Unmute" : "Mute"}
                 >
                     {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                 </button>
-
                 <button
                     onClick={toggleCamera}
                     className={`p-4 rounded-full border transition-all ${isCameraOff ? "bg-red-500 border-transparent text-white" : "bg-white/5 border-white/10 hover:bg-white/10 text-white"}`}
-                    title={isCameraOff ? "Turn on camera" : "Turn off camera"}
                 >
                     {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
                 </button>
-
                 <button
                     onClick={handleEndCall}
-                    className="px-6 py-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full flex items-center gap-2 transition-all shadow-lg shadow-red-900/30"
+                    className="px-6 py-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full flex items-center gap-2 transition-all"
                 >
                     <PhoneOff className="w-5 h-5" />
                     <span>Leave</span>
