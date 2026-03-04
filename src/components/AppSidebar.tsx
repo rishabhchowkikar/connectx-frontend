@@ -1,5 +1,8 @@
-import * as React from "react"
-import { Video } from "lucide-react"
+"use client";
+
+import * as React from "react";
+import { Video } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import {
     Sidebar,
@@ -13,9 +16,8 @@ import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
     SidebarRail,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 
-// This is sample data.
 const data = {
     navMain: [
         {
@@ -25,11 +27,12 @@ const data = {
                 {
                     title: "One on One Link",
                     url: "/dashboard",
-                    isActive: true,
+                    disabled: false,
                 },
                 {
-                    title: "Group Calling (version 2)",
-                    url: "#",
+                    title: "Group Calling",
+                    url: "/dashboard/group-calling",
+                    disabled: false,
                 },
             ],
         },
@@ -40,20 +43,23 @@ const data = {
                 {
                     title: "Voice Call (Coming Soon)",
                     url: "#",
+                    disabled: true,
                 },
             ],
-        }
+        },
     ],
-}
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    const pathname = usePathname();
+
     return (
         <Sidebar {...props}>
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <a href="#">
+                            <a href="/dashboard">
                                 <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                                     <Video className="size-4" />
                                 </div>
@@ -78,13 +84,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                 </SidebarMenuButton>
                                 {item.items?.length ? (
                                     <SidebarMenuSub>
-                                        {item.items.map((item) => (
-                                            <SidebarMenuSubItem key={item.title}>
-                                                <SidebarMenuSubButton asChild isActive={item.isActive}>
-                                                    <a href={item.url}>{item.title}</a>
-                                                </SidebarMenuSubButton>
-                                            </SidebarMenuSubItem>
-                                        ))}
+                                        {item.items.map((subItem) => {
+                                            const isActive = pathname === subItem.url;
+                                            return (
+                                                <SidebarMenuSubItem key={subItem.title}>
+                                                    <SidebarMenuSubButton
+                                                        asChild
+                                                        isActive={isActive}
+                                                        className={subItem.disabled ? "opacity-50 pointer-events-none" : ""}
+                                                    >
+                                                        <a href={subItem.disabled ? undefined : subItem.url}>
+                                                            {subItem.title}
+                                                        </a>
+                                                    </SidebarMenuSubButton>
+                                                </SidebarMenuSubItem>
+                                            );
+                                        })}
                                     </SidebarMenuSub>
                                 ) : null}
                             </SidebarMenuItem>
@@ -94,5 +109,5 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarContent>
             <SidebarRail />
         </Sidebar>
-    )
+    );
 }
