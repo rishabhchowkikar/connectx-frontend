@@ -4,7 +4,10 @@ import { useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/hooks/useSocket";
 import { AuthContext } from "@/context/AuthContext";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Users, Check, X, Crown } from "lucide-react";
+import {
+    Mic, MicOff, Video, VideoOff, PhoneOff,
+    Users, Check, X, Crown,
+} from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Participant {
@@ -14,20 +17,19 @@ interface Participant {
     isMuted?: boolean;
     isCamOff?: boolean;
 }
-
 interface WaitingUser {
     socketId: string;
     userName: string;
 }
 
-// ─── Per-user color ───────────────────────────────────────────────────────────
+// ─── Colors ───────────────────────────────────────────────────────────────────
 const COLORS = [
     "#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981",
     "#3b82f6","#ef4444","#14b8a6","#f97316","#a855f7",
 ];
-function getColor(idx: number) { return COLORS[idx % COLORS.length]; }
+const getColor = (i: number) => COLORS[i % COLORS.length];
 
-// ─── Grid config (mirrors VideoGridDemo exactly) ──────────────────────────────
+// ─── Grid helpers ─────────────────────────────────────────────────────────────
 function getGridConfig(total: number, mobile: boolean) {
     if (mobile) {
         if (total === 1) return { cols: 1, rows: 1 };
@@ -46,119 +48,162 @@ function getGridConfig(total: number, mobile: boolean) {
     return            { cols: 5, rows: 2 };
 }
 
-function getOrphanStyle(idx: number, total: number, cols: number) {
+function getOrphanStyle(idx: number, total: number, cols: number): React.CSSProperties {
     const rows = Math.ceil(total / cols);
     const lastRowCount = total - (rows - 1) * cols;
     if (lastRowCount === cols) return {};
-    const firstIdxInLastRow = (rows - 1) * cols;
-    if (idx < firstIdxInLastRow) return {};
+    const firstIdx = (rows - 1) * cols;
+    if (idx < firstIdx) return {};
     const colOffset = Math.floor((cols - lastRowCount) / 2);
-    const posInLastRow = idx - firstIdxInLastRow;
-    return { gridColumnStart: colOffset + 1 + posInLastRow };
+    return { gridColumnStart: colOffset + 1 + (idx - firstIdx) };
 }
 
-// ─── Video Tile (real stream or avatar) ───────────────────────────────────────
+// ─── VideoTile ────────────────────────────────────────────────────────────────
+// ✅ FIX: <video> is ALWAYS mounted — never unmounted.
+// We use CSS display:none/block to hide/show it.
+// This means srcObject stays set permanently and camera re-enable works.
 function VideoTile({
-    name, color, isLocal, isAdmin, isMuted, isCamOff, isActive, compact, stream, videoRef,
+    name, color, isLocal, isAdmin, isMuted, isCamOff,
+    isActive, compact, stream, videoRef,
 }: {
-    name: string; color: string; isLocal: boolean; isAdmin: boolean;
-    isMuted: boolean; isCamOff: boolean; isActive: boolean; compact: boolean;
-    stream?: MediaStream; videoRef?: React.RefObject<HTMLVideoElement>;
+    name: string;
+    color: string;
+    isLocal: boolean;
+    isAdmin: boolean;
+    isMuted: boolean;
+    isCamOff: boolean;
+    isActive: boolean;
+    compact: boolean;
+    stream?: MediaStream;
+    videoRef?: React.RefObject<HTMLVideoElement>;
 }) {
     const internalRef = useRef<HTMLVideoElement>(null);
-    const ref = videoRef || internalRef;
+    const ref = (videoRef ?? internalRef) as React.RefObject<HTMLVideoElement>;
 
+    // Set srcObject when stream first arrives (or changes)
     useEffect(() => {
-        if (ref.current && stream) {
+        if (ref.current && stream && ref.current.srcObject !== stream) {
             ref.current.srcObject = stream;
         }
-    }, [stream, ref]);
+    }, [stream]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const bars = [0.35, 0.65, 1, 0.7, 0.45];
+    const bars       = [0.35, 0.65, 1, 0.7, 0.45];
     const avatarSize = compact ? 38 : 54;
-    const fs = compact ? 10 : 12;
+    const fs         = compact ? 10 : 12;
+    const showVideo  = !isCamOff && (!!stream || isLocal);
 
     return (
         <div
-            className="relative overflow-hidden w-full h-full transition-all duration-200"
             style={{
+                position: "relative",
+                overflow: "hidden",
+                width: "100%",
+                height: "100%",
                 borderRadius: compact ? 10 : 14,
                 background: "#16171a",
-                border: isActive ? `2px solid ${color}99` : "1px solid rgba(255,255,255,0.06)",
-                boxShadow: isActive ? `0 0 0 1px ${color}33, 0 0 18px ${color}1a` : "none",
+                border: isActive
+                    ? `2px solid ${color}99`
+                    : "1px solid rgba(255,255,255,0.06)",
+                boxShadow: isActive
+                    ? `0 0 0 1px ${color}33, 0 0 18px ${color}1a`
+                    : "none",
+                transition: "border 0.2s, box-shadow 0.2s",
             }}
         >
-            {/* Video or avatar */}
-            {!isCamOff && stream ? (
-                <video
-                    ref={ref}
-                    autoPlay
-                    playsInline
-                    muted={isLocal}
-                    className={`absolute inset-0 w-full h-full object-cover ${isLocal ? "scale-x-[-1]" : ""}`}
-                />
-            ) : !isCamOff && !stream ? (
-                // Stream not yet arrived — show animated gradient placeholder
-                <div className="absolute inset-0">
-                    <div className="absolute inset-0" style={{
+            {/* ── Video element — ALWAYS in DOM ────────────────────────────────
+                display:none when cam off. Keeps srcObject alive so toggling
+                camera back on shows video immediately without re-setting srcObject. */}
+            <video
+                ref={ref}
+                autoPlay
+                playsInline
+                muted={isLocal}
+                style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    transform: isLocal ? "scaleX(-1)" : "none",
+                    display: showVideo ? "block" : "none",  // ✅ CSS hide, not unmount
+                }}
+            />
+
+            {/* ── Gradient placeholder (connecting…) ── */}
+            {!isCamOff && !stream && !isLocal && (
+                <div style={{ position: "absolute", inset: 0 }}>
+                    <div style={{
+                        position: "absolute", inset: 0,
                         background: `radial-gradient(ellipse at 35% 35%, ${color}18 0%, transparent 55%),
                                      radial-gradient(ellipse at 65% 65%, ${color}0c 0%, transparent 50%)`,
                     }} />
-                    <div className="absolute inset-0" style={{
+                    <div style={{
+                        position: "absolute", inset: 0,
                         backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,0.016) 2px,rgba(255,255,255,0.016) 3px)",
                     }} />
-                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2" style={{
+                    <div style={{
+                        position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
                         width: "54%", height: "76%",
                         background: `radial-gradient(ellipse at 50% 30%, ${color}38 0%, ${color}14 40%, transparent 75%)`,
                         borderRadius: "50% 50% 0 0 / 60% 60% 0 0",
                     }} />
-                    <div className="absolute inset-0" style={{
+                    <div style={{
+                        position: "absolute", inset: 0,
                         background: `radial-gradient(ellipse at 50% 50%, ${color}08 0%, transparent 60%)`,
                         animation: "breathe 3s ease-in-out infinite",
                     }} />
                 </div>
-            ) : (
-                // Camera off — avatar
-                <div
-                    className="absolute inset-0 flex flex-col items-center justify-center gap-1.5"
-                    style={{ background: `radial-gradient(ellipse at 50% 50%, ${color}0d 0%, transparent 70%)` }}
-                >
-                    <div
-                        className="rounded-full flex items-center justify-center"
-                        style={{ width: avatarSize, height: avatarSize, background: `${color}1e`, border: `2px solid ${color}44` }}
-                    >
-                        <span className="font-bold" style={{ fontSize: avatarSize * 0.38, color }}>
+            )}
+
+            {/* ── Avatar (camera off) ── */}
+            {isCamOff && (
+                <div style={{
+                    position: "absolute", inset: 0,
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+                    background: `radial-gradient(ellipse at 50% 50%, ${color}0d 0%, transparent 70%)`,
+                }}>
+                    <div style={{
+                        width: avatarSize, height: avatarSize, borderRadius: "50%",
+                        background: `${color}1e`, border: `2px solid ${color}44`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                        <span style={{ fontSize: avatarSize * 0.38, fontWeight: 700, color }}>
                             {name.charAt(0).toUpperCase()}
                         </span>
                     </div>
                     {!compact && (
-                        <span className="flex items-center gap-1" style={{ fontSize: 10, color: "#6b7280" }}>
+                        <span style={{ fontSize: 10, color: "#6b7280", display: "flex", alignItems: "center", gap: 3 }}>
                             <VideoOff style={{ width: 9, height: 9 }} /> Camera off
                         </span>
                     )}
                 </div>
             )}
 
-            {/* Speaking ring */}
+            {/* ── Speaking ring ── */}
             {isActive && (
-                <div className="absolute inset-0 pointer-events-none" style={{
+                <div style={{
+                    position: "absolute", inset: 0, pointerEvents: "none",
                     borderRadius: "inherit",
                     border: `2px solid ${color}bb`,
                     animation: "speakPulse 1.4s ease-in-out infinite",
                 }} />
             )}
 
-            {/* Bottom name bar */}
-            <div
-                className="absolute bottom-0 left-0 right-0 flex items-center gap-1.5 px-2 py-1.5"
-                style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.25) 60%, transparent 100%)" }}
-            >
+            {/* ── Name bar ── */}
+            <div style={{
+                position: "absolute", bottom: 0, left: 0, right: 0,
+                display: "flex", alignItems: "center", gap: 6, padding: "6px 8px",
+                background: "linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.25) 60%, transparent 100%)",
+            }}>
                 {isAdmin && <Crown style={{ width: fs, height: fs, color: "#facc15", flexShrink: 0 }} />}
-                <span className="font-medium truncate flex-1 text-white" style={{ fontSize: fs }}>
+                <span style={{
+                    fontSize: fs, fontWeight: 500, color: "white",
+                    flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
                     {isLocal ? `You (${name})` : name}
                 </span>
                 {!isMuted ? (
-                    <div className="flex items-end gap-[2px] shrink-0" style={{ height: 11 }}>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 11, flexShrink: 0 }}>
                         {bars.map((h, i) => (
                             <div key={i} style={{
                                 width: 2, height: `${h * 100}%`,
@@ -170,17 +215,21 @@ function VideoTile({
                         ))}
                     </div>
                 ) : (
-                    <div className="shrink-0 rounded-full flex items-center justify-center"
-                        style={{ width: 14, height: 14, background: "rgba(239,68,68,0.8)" }}>
+                    <div style={{
+                        width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
+                        background: "rgba(239,68,68,0.85)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
                         <MicOff style={{ width: 8, height: 8, color: "white" }} />
                     </div>
                 )}
             </div>
 
-            {/* YOU pill */}
+            {/* ── YOU pill ── */}
             {isLocal && (
-                <div className="absolute top-2 left-2 font-bold" style={{
-                    fontSize: 9, padding: "2px 6px", borderRadius: 5,
+                <div style={{
+                    position: "absolute", top: 8, left: 8,
+                    fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 5,
                     background: `${color}2a`, color, border: `1px solid ${color}40`,
                 }}>YOU</div>
             )}
@@ -190,35 +239,33 @@ function VideoTile({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function GroupCallRoom() {
-    const { roomId } = useParams<{ roomId: string }>();
-    const router = useRouter();
-    const socket = useSocket();
-    const auth = useContext(AuthContext);
+    const { roomId }  = useParams<{ roomId: string }>();
+    const router      = useRouter();
+    const socket      = useSocket();
+    const auth        = useContext(AuthContext);
     const { user, loading } = auth || {};
-    const userName = auth?.loading ? "Loading..." : (auth?.user?.name || "Guest");
+    const userName    = (!auth?.loading && auth?.user?.name) ? auth.user.name : "Guest";
 
     // ── Refs ──────────────────────────────────────────────────────────────────
-    const localVideoRef = useRef<HTMLVideoElement>(null);
-    const localStreamRef = useRef<MediaStream | null>(null);
+    const localVideoRef      = useRef<HTMLVideoElement>(null);
+    const localStreamRef     = useRef<MediaStream | null>(null);
     const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
 
     // ── State ─────────────────────────────────────────────────────────────────
-    const [isMuted, setIsMuted]           = useState(false);
-    const [isCameraOff, setIsCameraOff]   = useState(false);
+    const [isMuted,          setIsMuted]          = useState(false);
+    const [isCameraOff,      setIsCameraOff]      = useState(false);
     const [mediaStreamReady, setMediaStreamReady] = useState(false);
-
-    // ✅ hasJoined triggers socket effect — roomState only controls which screen to show
-    const [hasJoined, setHasJoined]       = useState(false);
-    const [roomState, setRoomState]       = useState<"preview" | "waiting" | "in-call">("preview");
-
-    const [isAdmin, setIsAdmin]           = useState(false);
-    const [adminName, setAdminName]       = useState("");
-    const [participants, setParticipants] = useState<Participant[]>([]);
-    const [waitingUsers, setWaitingUsers] = useState<WaitingUser[]>([]);
-    const [callStatus, setCallStatus]     = useState("Connecting...");
+    // ✅ hasJoined triggers socket effect once. roomState only controls which screen to render.
+    const [hasJoined,        setHasJoined]        = useState(false);
+    const [roomState,        setRoomState]        = useState<"preview" | "waiting" | "in-call">("preview");
+    const [isAdmin,          setIsAdmin]          = useState(false);
+    const [adminName,        setAdminName]        = useState("");
+    const [participants,     setParticipants]     = useState<Participant[]>([]);
+    const [waitingUsers,     setWaitingUsers]     = useState<WaitingUser[]>([]);
+    const [callStatus,       setCallStatus]       = useState("Connecting...");
     const [showWaitingPanel, setShowWaitingPanel] = useState(true);
-    const [speakIdx, setSpeakIdx]         = useState(0);
-    const [isMobile, setIsMobile]         = useState(false);
+    const [speakIdx,         setSpeakIdx]         = useState(0);
+    const [isMobile,         setIsMobile]         = useState(false);
 
     // ── Detect mobile ─────────────────────────────────────────────────────────
     useEffect(() => {
@@ -228,7 +275,7 @@ export default function GroupCallRoom() {
         return () => window.removeEventListener("resize", check);
     }, []);
 
-    // ── Simulate active speaker cycling (replace with real VAD later) ─────────
+    // ── Speaker cycling (cosmetic — replace with real VAD if desired) ─────────
     useEffect(() => {
         if (roomState !== "in-call") return;
         const total = participants.length + 1;
@@ -252,15 +299,15 @@ export default function GroupCallRoom() {
                 localStreamRef.current = stream;
                 if (localVideoRef.current) localVideoRef.current.srcObject = stream;
                 setMediaStreamReady(true);
-            } catch (err: any) {
-                console.error("Camera error:", err);
+            } catch (err) {
+                console.error("Camera/mic error:", err);
             }
         };
         init();
         return () => { localStreamRef.current?.getTracks().forEach(t => t.stop()); };
     }, []);
 
-    // Re-attach stream when screen changes (video element remounts)
+    // ✅ Re-attach local stream whenever screen changes (video element may remount)
     useEffect(() => {
         if (localVideoRef.current && localStreamRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
@@ -273,31 +320,43 @@ export default function GroupCallRoom() {
             iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
                 { urls: "stun:stun1.l.google.com:19302" },
-                { urls: "turn:openrelay.metered.ca:80",              username: "openrelayproject", credential: "openrelayproject" },
-                { urls: "turn:openrelay.metered.ca:443",             username: "openrelayproject", credential: "openrelayproject" },
-                { urls: "turn:openrelay.metered.ca:443?transport=tcp",username: "openrelayproject", credential: "openrelayproject" },
+                {
+                    urls: "turn:openrelay.metered.ca:80",
+                    username: "openrelayproject", credential: "openrelayproject",
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:443",
+                    username: "openrelayproject", credential: "openrelayproject",
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                    username: "openrelayproject", credential: "openrelayproject",
+                },
             ],
         });
 
+        // Add local tracks to the peer connection
         localStreamRef.current?.getTracks().forEach(track => {
             pc.addTrack(track, localStreamRef.current!);
         });
 
         pc.onicecandidate = (event) => {
             if (event.candidate && socket) {
-                socket.emit("group-ice-candidate", { candidate: event.candidate, targetId, roomId });
+                socket.emit("group-ice-candidate", {
+                    candidate: event.candidate, targetId, roomId,
+                });
             }
         };
 
         pc.ontrack = (event) => {
             const stream = event.streams[0];
-            setParticipants(prev => prev.map(p =>
-                p.socketId === targetId ? { ...p, stream } : p
-            ));
+            setParticipants(prev =>
+                prev.map(p => p.socketId === targetId ? { ...p, stream } : p)
+            );
         };
 
         pc.oniceconnectionstatechange = () => {
-            console.log(`🧊 ICE [${targetId}]:`, pc.iceConnectionState);
+            console.log(`🧊 ICE [${targetId.slice(0,8)}]:`, pc.iceConnectionState);
         };
 
         peerConnectionsRef.current.set(targetId, pc);
@@ -305,24 +364,24 @@ export default function GroupCallRoom() {
     }, [socket, roomId]);
 
     // ── Socket signaling ──────────────────────────────────────────────────────
-    // ✅ KEY FIX: depends on hasJoined NOT roomState
-    // Runs ONCE on join — listeners survive waiting→in-call transition
+    // ✅ KEY: depends on `hasJoined` NOT `roomState`.
+    //    Runs ONCE when user clicks Join Now.
+    //    Listeners survive the preview→waiting→in-call transitions.
     useEffect(() => {
         if (!socket || !hasJoined || !mediaStreamReady) return;
 
-        console.log("🔌 Joining group room:", roomId);
+        console.log("🔌 join-group-room:", roomId);
         socket.emit("join-group-room", { roomId, userName });
 
+        // Admin: created room, enter call immediately
         socket.on("group-joined", ({ isAdmin: admin }: { isAdmin: boolean }) => {
-            console.log("✅ group-joined, isAdmin:", admin);
             setIsAdmin(admin);
             setRoomState("in-call");
-            setCallStatus(admin ? "Waiting for participants..." : "Connected");
+            setCallStatus(admin ? "Waiting for participants…" : "Connected");
         });
 
-        // ✅ Switches UI to waiting — but socket stays alive
+        // Non-admin: put in waiting room UI (socket stays alive)
         socket.on("waiting-for-admission", ({ adminName: name }: { adminName: string }) => {
-            console.log("⏳ Waiting for admission from:", name);
             setAdminName(name);
             setRoomState("waiting");
         });
@@ -337,34 +396,34 @@ export default function GroupCallRoom() {
             router.push("/dashboard/group-calling");
         });
 
-        // ✅ Admitted — listener alive because roomState not in deps
-        socket.on("group-admitted", async ({
-            participants: existingPeers,
+        // ✅ Non-admin admitted — listener alive because roomState not in deps
+        socket.on("group-admitted", ({
+            participants: peers,
         }: { participants: { socketId: string; userName: string }[]; roomId: string }) => {
-            console.log("✅ Admitted! Peers:", existingPeers.length);
+            console.log("✅ Admitted, peers:", peers.length);
+            setParticipants(peers.map(p => ({ ...p, stream: undefined })));
             setRoomState("in-call");
             setCallStatus("Connected");
-            setParticipants(existingPeers.map(p => ({ ...p, stream: undefined })));
         });
 
-        socket.on("user-waiting", ({ socketId, userName: waitingName }: WaitingUser) => {
-            console.log("👋 User waiting:", waitingName);
-            setWaitingUsers(prev => [...prev, { socketId, userName: waitingName }]);
+        // Admin: someone knocked
+        socket.on("user-waiting", ({ socketId, userName: wName }: WaitingUser) => {
+            setWaitingUsers(prev => [...prev, { socketId, userName: wName }]);
             setShowWaitingPanel(true);
         });
 
+        // Existing peer: new participant joined → send offer to them
         socket.on("group-new-peer", async ({
-            socketId: newPeerId,
-            userName: newPeerName,
+            socketId: newId, userName: newName,
         }: { socketId: string; userName: string }) => {
-            console.log("📞 New peer:", newPeerName);
-            setParticipants(prev => [...prev, { socketId: newPeerId, userName: newPeerName }]);
-            const pc = createPeerConnection(newPeerId);
+            setParticipants(prev => [...prev, { socketId: newId, userName: newName }]);
+            const pc    = createPeerConnection(newId);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-            socket.emit("group-offer", { offer, targetId: newPeerId, roomId });
+            socket.emit("group-offer", { offer, targetId: newId, roomId });
         });
 
+        // Receive offer from an existing peer
         socket.on("group-offer", async ({
             offer, fromId,
         }: { offer: RTCSessionDescriptionInit; fromId: string; roomId: string }) => {
@@ -389,7 +448,7 @@ export default function GroupCallRoom() {
             const pc = peerConnectionsRef.current.get(fromId);
             if (pc) {
                 try { await pc.addIceCandidate(candidate); }
-                catch (e) { console.error("ICE error:", e); }
+                catch (e) { console.error("ICE add error:", e); }
             }
         });
 
@@ -420,7 +479,7 @@ export default function GroupCallRoom() {
             peerConnectionsRef.current.forEach(pc => pc.close());
             peerConnectionsRef.current.clear();
         };
-    // ✅ roomState NOT in deps — effect never re-runs on screen change
+    // ✅ roomState intentionally NOT here — effect must not re-run on screen changes
     }, [socket, hasJoined, mediaStreamReady, roomId, userName, createPeerConnection, router]);
 
     // ── Admin actions ─────────────────────────────────────────────────────────
@@ -428,7 +487,6 @@ export default function GroupCallRoom() {
         socket?.emit("admit-user", { roomId, socketId });
         setWaitingUsers(prev => prev.filter(u => u.socketId !== socketId));
     };
-
     const rejectUser = (socketId: string) => {
         socket?.emit("reject-user", { roomId, socketId });
         setWaitingUsers(prev => prev.filter(u => u.socketId !== socketId));
@@ -437,12 +495,18 @@ export default function GroupCallRoom() {
     // ── Media controls ────────────────────────────────────────────────────────
     const toggleMute = () => {
         const track = localStreamRef.current?.getAudioTracks()[0];
-        if (track) { track.enabled = !track.enabled; setIsMuted(!track.enabled); }
+        if (!track) return;
+        track.enabled = !track.enabled;
+        setIsMuted(!track.enabled);
     };
 
+    // ✅ FIX: toggle track.enabled only. Video element stays mounted so srcObject
+    //    is preserved — camera comes back on immediately without re-setting srcObject.
     const toggleCamera = () => {
         const track = localStreamRef.current?.getVideoTracks()[0];
-        if (track) { track.enabled = !track.enabled; setIsCameraOff(!track.enabled); }
+        if (!track) return;
+        track.enabled = !track.enabled;
+        setIsCameraOff(!track.enabled);
     };
 
     const handleEndCall = () => {
@@ -455,8 +519,8 @@ export default function GroupCallRoom() {
     // ── Auth loading ──────────────────────────────────────────────────────────
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#101115] flex items-center justify-center">
-                <div className="text-white animate-pulse text-lg">Loading...</div>
+            <div style={{ minHeight: "100vh", background: "#101115", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ color: "white", fontSize: 16, opacity: 0.6 }}>Loading…</div>
             </div>
         );
     }
@@ -467,65 +531,73 @@ export default function GroupCallRoom() {
     // =========================================================================
     if (roomState === "preview") {
         return (
-            <div className="min-h-screen bg-[#101115] flex flex-col items-center justify-center text-white p-6">
-                <style>{`
-                    @keyframes breathe { 0%,100%{opacity:0.5} 50%{opacity:1} }
-                `}</style>
-                <div className="max-w-5xl w-full flex flex-col md:flex-row gap-8 items-center justify-center">
-                    <div className="w-full md:w-[60%]">
-                        <div className="relative aspect-video bg-[#1e1f22] rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+            <div style={{ minHeight: "100vh", background: "#101115", color: "white", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "system-ui,sans-serif" }}>
+                <style>{`@keyframes breathe{0%,100%{opacity:.5}50%{opacity:1}}`}</style>
+                <div style={{ maxWidth: 900, width: "100%", display: "flex", flexWrap: "wrap", gap: 32, alignItems: "center", justifyContent: "center" }}>
+
+                    {/* Camera preview */}
+                    <div style={{ flex: "1 1 340px", maxWidth: 560 }}>
+                        <div style={{ position: "relative", aspectRatio: "16/9", background: "#1e1f22", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 24px 48px rgba(0,0,0,0.5)" }}>
+                            {/* ✅ Always rendered — just hidden when cam off */}
                             <video
                                 ref={localVideoRef}
                                 autoPlay playsInline muted
-                                className={`w-full h-full object-cover scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
+                                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)", display: isCameraOff ? "none" : "block" }}
                             />
                             {isCameraOff && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-[#1e1f22]">
-                                    <div className="w-24 h-24 rounded-full bg-indigo-600 flex items-center justify-center">
-                                        <span className="text-4xl font-bold">{userName.charAt(0).toUpperCase()}</span>
+                                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#1e1f22" }}>
+                                    <div style={{ width: 88, height: 88, borderRadius: "50%", background: "#4f46e5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                        <span style={{ fontSize: 36, fontWeight: 700 }}>{userName.charAt(0).toUpperCase()}</span>
                                     </div>
                                 </div>
                             )}
-                            <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1.5 rounded-md text-sm backdrop-blur-md">
+                            <div style={{ position: "absolute", bottom: 12, left: 12, background: "rgba(0,0,0,0.6)", padding: "4px 10px", borderRadius: 7, fontSize: 13, backdropFilter: "blur(8px)" }}>
                                 You ({userName})
                             </div>
-                            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
-                                <button onClick={toggleMute} className={`p-3 rounded-full border transition-all ${isMuted ? "bg-red-500 border-transparent" : "bg-gray-800/80 border-white/10 backdrop-blur-sm"}`}>
-                                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                            <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 12 }}>
+                                <button onClick={toggleMute} style={{ width: 44, height: 44, borderRadius: "50%", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: isMuted ? "#ef4444" : "rgba(30,31,34,0.85)", color: "white", backdropFilter: "blur(8px)" }}>
+                                    {isMuted ? <MicOff style={{ width: 18, height: 18 }} /> : <Mic style={{ width: 18, height: 18 }} />}
                                 </button>
-                                <button onClick={toggleCamera} className={`p-3 rounded-full border transition-all ${isCameraOff ? "bg-red-500 border-transparent" : "bg-gray-800/80 border-white/10 backdrop-blur-sm"}`}>
-                                    {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+                                <button onClick={toggleCamera} style={{ width: 44, height: 44, borderRadius: "50%", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: isCameraOff ? "#ef4444" : "rgba(30,31,34,0.85)", color: "white", backdropFilter: "blur(8px)" }}>
+                                    {isCameraOff ? <VideoOff style={{ width: 18, height: 18 }} /> : <Video style={{ width: 18, height: 18 }} />}
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <div className="w-full md:w-[40%] flex flex-col gap-5">
+
+                    {/* Join panel */}
+                    <div style={{ flex: "1 1 260px", maxWidth: 340, display: "flex", flexDirection: "column", gap: 18 }}>
                         <div>
-                            <h1 className="text-3xl font-bold mb-1">Ready to join?</h1>
-                            <p className="text-gray-400">Joining as <span className="text-white font-semibold">{userName}</span></p>
+                            <h1 style={{ fontSize: 30, fontWeight: 800, margin: 0, marginBottom: 6 }}>Ready to join?</h1>
+                            <p style={{ color: "#9ca3af", margin: 0 }}>
+                                Joining as <span style={{ color: "white", fontWeight: 600 }}>{userName}</span>
+                            </p>
                         </div>
-                        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                            <p className="text-gray-400 text-xs font-medium mb-1">Room ID</p>
-                            <p className="font-mono text-xs text-gray-500 break-all">{roomId}</p>
+                        <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                            <p style={{ color: "#6b7280", fontSize: 11, fontWeight: 600, margin: "0 0 4px 0", textTransform: "uppercase", letterSpacing: 1 }}>Room ID</p>
+                            <p style={{ fontFamily: "monospace", fontSize: 11, color: "#9ca3af", margin: 0, wordBreak: "break-all" }}>{roomId}</p>
                         </div>
+
                         {mediaStreamReady ? (
                             <button
-                                onClick={() => {
-                                    setRoomState("in-call");
-                                    setHasJoined(true); // ✅ triggers socket effect ONCE
-                                }}
-                                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 font-semibold rounded-full transition-all text-lg shadow-lg shadow-indigo-900/40"
+                                onClick={() => { setRoomState("in-call"); setHasJoined(true); }}
+                                style={{ padding: "14px 0", background: "#4f46e5", color: "white", border: "none", borderRadius: 50, fontWeight: 700, fontSize: 16, cursor: "pointer", boxShadow: "0 8px 24px rgba(79,70,229,0.35)", transition: "background 0.15s" }}
+                                onMouseEnter={e => (e.currentTarget.style.background = "#4338ca")}
+                                onMouseLeave={e => (e.currentTarget.style.background = "#4f46e5")}
                             >
                                 Join Now
                             </button>
                         ) : (
-                            <div className="w-full py-3.5 bg-gray-800 text-gray-400 rounded-full animate-pulse text-center font-medium">
-                                Starting camera...
+                            <div style={{ padding: "14px 0", background: "#1f2937", color: "#6b7280", borderRadius: 50, textAlign: "center", fontWeight: 600, fontSize: 15 }}>
+                                Starting camera…
                             </div>
                         )}
+
                         <button
                             onClick={() => router.push("/dashboard/group-calling")}
-                            className="w-full py-3.5 border border-gray-700 text-gray-300 rounded-full hover:bg-gray-800 transition-all text-center font-medium"
+                            style={{ padding: "13px 0", background: "transparent", color: "#9ca3af", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 50, fontWeight: 600, fontSize: 15, cursor: "pointer" }}
+                            onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                         >
                             Cancel
                         </button>
@@ -540,94 +612,88 @@ export default function GroupCallRoom() {
     // =========================================================================
     if (roomState === "waiting") {
         return (
-            <div className="min-h-screen bg-[#101115] flex items-center justify-center text-white p-6">
-                <div className="max-w-md w-full text-center">
-                    <div className="w-20 h-20 rounded-full bg-indigo-600/20 border-2 border-indigo-500 flex items-center justify-center mx-auto mb-6 animate-pulse">
-                        <Users className="w-8 h-8 text-indigo-400" />
+            <div style={{ minHeight: "100vh", background: "#101115", color: "white", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "system-ui,sans-serif" }}>
+                <div style={{ maxWidth: 420, width: "100%", textAlign: "center" }}>
+                    <div style={{ width: 72, height: 72, borderRadius: "50%", border: "2px solid #6366f1", background: "rgba(99,102,241,0.12)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px", animation: "breathe 2s ease-in-out infinite" }}>
+                        <Users style={{ width: 30, height: 30, color: "#818cf8" }} />
                     </div>
-                    <h1 className="text-2xl font-bold mb-2">Waiting to be admitted</h1>
-                    <p className="text-gray-400 mb-1">{adminName} will let you in soon.</p>
-                    <p className="text-gray-600 text-sm mb-8">Please wait for the host to admit you.</p>
-                    <div className="relative aspect-video bg-[#1e1f22] rounded-2xl overflow-hidden border border-white/10 mb-6">
+                    <h1 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 8px" }}>Waiting to be admitted</h1>
+                    <p style={{ color: "#9ca3af", margin: "0 0 4px" }}>{adminName} will let you in soon.</p>
+                    <p style={{ color: "#4b5563", fontSize: 13, margin: "0 0 28px" }}>Please wait for the host to admit you.</p>
+
+                    {/* ✅ Always-rendered video — just CSS hidden when cam off */}
+                    <div style={{ position: "relative", aspectRatio: "16/9", background: "#1e1f22", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 22 }}>
                         <video
                             ref={localVideoRef}
                             autoPlay playsInline muted
-                            className={`w-full h-full object-cover scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
+                            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)", display: isCameraOff ? "none" : "block" }}
                         />
                         {isCameraOff && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-[#1e1f22]">
-                                <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center">
-                                    <span className="text-2xl font-bold">{userName.charAt(0).toUpperCase()}</span>
+                            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#4f46e5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <span style={{ fontSize: 26, fontWeight: 700 }}>{userName.charAt(0).toUpperCase()}</span>
                                 </div>
                             </div>
                         )}
                     </div>
-                    <div className="flex justify-center gap-4">
-                        <button onClick={toggleMute} className={`p-3 rounded-full border ${isMuted ? "bg-red-500 border-transparent" : "bg-gray-800 border-gray-700"}`}>
-                            {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                        </button>
-                        <button onClick={toggleCamera} className={`p-3 rounded-full border ${isCameraOff ? "bg-red-500 border-transparent" : "bg-gray-800 border-gray-700"}`}>
-                            {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-                        </button>
-                        <button onClick={handleEndCall} className="p-3 rounded-full bg-red-600 border-transparent">
-                            <PhoneOff className="w-5 h-5" />
+
+                    <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
+                        {[
+                            { Icon: isMuted ? MicOff : Mic, active: isMuted, fn: toggleMute },
+                            { Icon: isCameraOff ? VideoOff : Video, active: isCameraOff, fn: toggleCamera },
+                        ].map(({ Icon, active, fn }, i) => (
+                            <button key={i} onClick={fn} style={{ width: 46, height: 46, borderRadius: "50%", border: active ? "none" : "1px solid rgba(255,255,255,0.12)", background: active ? "#ef4444" : "rgba(255,255,255,0.07)", color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <Icon style={{ width: 18, height: 18 }} />
+                            </button>
+                        ))}
+                        <button onClick={handleEndCall} style={{ width: 46, height: 46, borderRadius: "50%", border: "none", background: "#dc2626", color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <PhoneOff style={{ width: 18, height: 18 }} />
                         </button>
                     </div>
                 </div>
+                <style>{`@keyframes breathe{0%,100%{opacity:.5}50%{opacity:1}}`}</style>
             </div>
         );
     }
 
     // =========================================================================
-    // IN CALL SCREEN — VideoGridDemo tile system with real streams
+    // IN-CALL SCREEN
     // =========================================================================
-    const totalTiles = participants.length + 1;
+    const totalTiles  = participants.length + 1;
     const { cols, rows } = getGridConfig(totalTiles, isMobile);
-    const compact = totalTiles >= 7;
+    const compact     = totalTiles >= 7;
     const allowScroll = isMobile && totalTiles > 6;
 
     return (
         <div style={{ height: "100vh", background: "#101115", color: "white", display: "flex", flexDirection: "column", fontFamily: "system-ui,sans-serif" }}>
             <style>{`
-                * { box-sizing: border-box; }
-                @keyframes audioBar   { from { transform: scaleY(0.45); } to { transform: scaleY(1); } }
-                @keyframes speakPulse { 0%,100% { opacity: 0.65; } 50% { opacity: 1; } }
-                @keyframes breathe    { 0%,100% { opacity: 0.5; }  50% { opacity: 1; } }
-                ::-webkit-scrollbar       { width: 3px; }
-                ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+                *{box-sizing:border-box}
+                @keyframes audioBar{from{transform:scaleY(.45)}to{transform:scaleY(1)}}
+                @keyframes speakPulse{0%,100%{opacity:.65}50%{opacity:1}}
+                @keyframes breathe{0%,100%{opacity:.5}50%{opacity:1}}
+                ::-webkit-scrollbar{width:3px}
+                ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
             `}</style>
 
-            {/* ── Top bar ── */}
-            <div style={{
-                flexShrink: 0, height: 48, background: "#18191c",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
-                display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px",
-            }}>
+            {/* ── Top bar ─────────────────────────────────────────────────────── */}
+            <div style={{ flexShrink: 0, height: 48, background: "#18191c", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 7,
-                        background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
                         {callStatus}
                     </span>
                     <span style={{ color: "#9ca3af", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
                         <Users style={{ width: 13, height: 13 }} />{totalTiles} / 10
                     </span>
                     {isAdmin && (
-                        <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6,
-                            color: "#facc15", background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)",
-                            display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, color: "#facc15", background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", display: "flex", alignItems: "center", gap: 4 }}>
                             <Crown style={{ width: 11, height: 11 }} />Host
                         </span>
                     )}
                 </div>
-
-                {/* Waiting badge */}
                 {isAdmin && waitingUsers.length > 0 && (
                     <button
                         onClick={() => setShowWaitingPanel(v => !v)}
-                        style={{ display: "flex", alignItems: "center", gap: 6,
-                            background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.4)",
-                            color: "#a5b4fc", padding: "6px 12px", borderRadius: 8, fontSize: 12,
-                            cursor: "pointer", animation: "breathe 2s ease-in-out infinite" }}
+                        style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.4)", color: "#a5b4fc", padding: "6px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", animation: "breathe 2s ease-in-out infinite" }}
                     >
                         <Users style={{ width: 13, height: 13 }} />
                         {waitingUsers.length} waiting
@@ -635,31 +701,15 @@ export default function GroupCallRoom() {
                 )}
             </div>
 
-            {/* ── Main area ── */}
+            {/* ── Main area ───────────────────────────────────────────────────── */}
             <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
 
-                {/* Grid */}
-                <div style={{
-                    flex: 1, minHeight: 0,
-                    overflow: allowScroll ? "auto" : "hidden",
-                    display: "flex",
-                    justifyContent: isMobile ? "center" : "stretch",
-                    padding: compact ? 6 : 8,
-                }}>
-                    <div style={{
-                        width: isMobile ? 375 : "100%",
-                        height: allowScroll ? "auto" : "100%",
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                        gridTemplateRows: allowScroll ? undefined : `repeat(${rows}, 1fr)`,
-                        gap: compact ? 5 : 8,
-                    }}>
+                {/* Video grid */}
+                <div style={{ flex: 1, minHeight: 0, overflow: allowScroll ? "auto" : "hidden", display: "flex", justifyContent: isMobile ? "center" : "stretch", padding: compact ? 6 : 8 }}>
+                    <div style={{ width: isMobile ? 375 : "100%", height: allowScroll ? "auto" : "100%", display: "grid", gridTemplateColumns: `repeat(${cols},1fr)`, gridTemplateRows: allowScroll ? undefined : `repeat(${rows},1fr)`, gap: compact ? 5 : 8 }}>
+
                         {/* Local tile */}
-                        <div style={{
-                            minWidth: 0, minHeight: 0,
-                            ...(allowScroll ? { aspectRatio: "16/9" } : {}),
-                            ...getOrphanStyle(0, totalTiles, cols),
-                        }}>
+                        <div style={{ minWidth: 0, minHeight: 0, ...(allowScroll ? { aspectRatio: "16/9" } : {}), ...getOrphanStyle(0, totalTiles, cols) }}>
                             <VideoTile
                                 name={userName}
                                 color={getColor(0)}
@@ -669,25 +719,21 @@ export default function GroupCallRoom() {
                                 isCamOff={isCameraOff}
                                 isActive={speakIdx === 0}
                                 compact={compact}
-                                stream={localStreamRef.current || undefined}
+                                stream={localStreamRef.current ?? undefined}
                                 videoRef={localVideoRef as React.RefObject<HTMLVideoElement>}
                             />
                         </div>
 
                         {/* Remote tiles */}
                         {participants.map((p, idx) => (
-                            <div key={p.socketId} style={{
-                                minWidth: 0, minHeight: 0,
-                                ...(allowScroll ? { aspectRatio: "16/9" } : {}),
-                                ...getOrphanStyle(idx + 1, totalTiles, cols),
-                            }}>
+                            <div key={p.socketId} style={{ minWidth: 0, minHeight: 0, ...(allowScroll ? { aspectRatio: "16/9" } : {}), ...getOrphanStyle(idx + 1, totalTiles, cols) }}>
                                 <VideoTile
                                     name={p.userName}
                                     color={getColor(idx + 1)}
                                     isLocal={false}
                                     isAdmin={false}
-                                    isMuted={p.isMuted || false}
-                                    isCamOff={p.isCamOff || false}
+                                    isMuted={p.isMuted ?? false}
+                                    isCamOff={p.isCamOff ?? false}
                                     isActive={speakIdx === idx + 1}
                                     compact={compact}
                                     stream={p.stream}
@@ -697,42 +743,29 @@ export default function GroupCallRoom() {
                     </div>
                 </div>
 
-                {/* Admin waiting panel */}
+                {/* Admin: waiting panel */}
                 {isAdmin && waitingUsers.length > 0 && showWaitingPanel && (
-                    <div style={{ width: 272, background: "#18191c", borderLeft: "1px solid rgba(255,255,255,0.06)",
-                        display: "flex", flexDirection: "column", flexShrink: 0 }}>
-                        <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)",
-                            display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ width: 272, background: "#18191c", borderLeft: "1px solid rgba(255,255,255,0.06)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+                        <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <span style={{ color: "white", fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
                                 <Users style={{ width: 14, height: 14, color: "#818cf8" }} />
                                 Waiting ({waitingUsers.length})
                             </span>
-                            <button onClick={() => setShowWaitingPanel(false)}
-                                style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer" }}>
+                            <button onClick={() => setShowWaitingPanel(false)} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", display: "flex" }}>
                                 <X style={{ width: 15, height: 15 }} />
                             </button>
                         </div>
                         <div style={{ flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                             {waitingUsers.map(u => (
-                                <div key={u.socketId} style={{ background: "rgba(255,255,255,0.04)",
-                                    borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8,
-                                    border: "1px solid rgba(255,255,255,0.06)" }}>
-                                    <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#4f46e5",
-                                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                        <span style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-                                            {u.userName.charAt(0).toUpperCase()}
-                                        </span>
+                                <div key={u.socketId} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(255,255,255,0.06)" }}>
+                                    <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#4f46e5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: "white" }}>{u.userName.charAt(0).toUpperCase()}</span>
                                     </div>
-                                    <span style={{ color: "white", fontSize: 13, flex: 1, overflow: "hidden",
-                                        textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.userName}</span>
-                                    <button onClick={() => admitUser(u.socketId)}
-                                        style={{ width: 30, height: 30, borderRadius: "50%", background: "#16a34a",
-                                            border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <span style={{ color: "white", fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.userName}</span>
+                                    <button onClick={() => admitUser(u.socketId)} style={{ width: 30, height: 30, borderRadius: "50%", background: "#16a34a", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                         <Check style={{ width: 14, height: 14, color: "white" }} />
                                     </button>
-                                    <button onClick={() => rejectUser(u.socketId)}
-                                        style={{ width: 30, height: 30, borderRadius: "50%", background: "#b91c1c",
-                                            border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <button onClick={() => rejectUser(u.socketId)} style={{ width: 30, height: 30, borderRadius: "50%", background: "#b91c1c", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                         <X style={{ width: 14, height: 14, color: "white" }} />
                                     </button>
                                 </div>
@@ -740,10 +773,7 @@ export default function GroupCallRoom() {
                         </div>
                         {waitingUsers.length > 1 && (
                             <div style={{ padding: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                                <button
-                                    onClick={() => waitingUsers.forEach(u => admitUser(u.socketId))}
-                                    style={{ width: "100%", padding: "8px 0", background: "#4f46e5", color: "white",
-                                        border: "none", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                                <button onClick={() => waitingUsers.forEach(u => admitUser(u.socketId))} style={{ width: "100%", padding: "8px 0", background: "#4f46e5", color: "white", border: "none", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
                                     Admit All ({waitingUsers.length})
                                 </button>
                             </div>
@@ -752,30 +782,17 @@ export default function GroupCallRoom() {
                 )}
             </div>
 
-            {/* ── Controls ── */}
-            <div style={{ flexShrink: 0, height: 68, background: "#18191c",
-                borderTop: "1px solid rgba(255,255,255,0.06)",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            {/* ── Controls ─────────────────────────────────────────────────────── */}
+            <div style={{ flexShrink: 0, height: 68, background: "#18191c", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
                 {[
-                    { Icon: isMuted ? MicOff : Mic,           active: isMuted,    fn: toggleMute },
-                    { Icon: isCameraOff ? VideoOff : Video,   active: isCameraOff, fn: toggleCamera },
+                    { Icon: isMuted ? MicOff : Mic,         active: isMuted,    fn: toggleMute },
+                    { Icon: isCameraOff ? VideoOff : Video, active: isCameraOff, fn: toggleCamera },
                 ].map(({ Icon, active, fn }, i) => (
-                    <button key={i} onClick={fn} style={{
-                        width: 46, height: 46, borderRadius: "50%",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        background: active ? "#ef4444" : "rgba(255,255,255,0.07)",
-                        border: active ? "none" : "1px solid rgba(255,255,255,0.12)",
-                        color: "white", cursor: "pointer", transition: "all 0.15s",
-                    }}>
+                    <button key={i} onClick={fn} style={{ width: 46, height: 46, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: active ? "#ef4444" : "rgba(255,255,255,0.07)", border: active ? "none" : "1px solid rgba(255,255,255,0.12)", color: "white", cursor: "pointer", transition: "all 0.15s" }}>
                         <Icon style={{ width: 18, height: 18 }} />
                     </button>
                 ))}
-                <button onClick={handleEndCall} style={{
-                    height: 46, padding: "0 20px", borderRadius: 23,
-                    display: "flex", alignItems: "center", gap: 8,
-                    background: "#ef4444", color: "white", border: "none",
-                    cursor: "pointer", fontSize: 14, fontWeight: 600,
-                }}>
+                <button onClick={handleEndCall} style={{ height: 46, padding: "0 20px", borderRadius: 23, display: "flex", alignItems: "center", gap: 8, background: "#ef4444", color: "white", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
                     <PhoneOff style={{ width: 16, height: 16 }} />Leave
                 </button>
             </div>
