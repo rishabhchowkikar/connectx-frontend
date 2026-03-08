@@ -4,9 +4,10 @@ import { useState, useContext, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AuthContext } from "@/context/AuthContext";
 import Link from "next/link";
+import { GoogleLogin } from "@react-oauth/google";
 
 export default function LoginPage() {
-    const { login, error, clearError, user, loading } = useContext(AuthContext)!;
+    const { login, googleAuth, error, clearError, user, loading } = useContext(AuthContext)!;
     const router = useRouter();
 
     const [email, setEmail] = useState("");
@@ -34,6 +35,19 @@ export default function LoginPage() {
             // error is already set in context
             setSubmitting(false);
         }
+    };
+    const handleGoogleSuccess = async (credentialResponse: any) => {
+        clearError();
+        try {
+            await googleAuth(credentialResponse.credential);
+            window.location.href = '/dashboard'
+        } catch (error) {
+
+        }
+    }
+
+    const handleGoogleError = () => {
+        console.error("Google Sign In Failed");
     };
 
     // Middleware handles auth redirects, so we can show the form immediately
@@ -90,6 +104,24 @@ export default function LoginPage() {
                         {submitting ? "Signing in..." : "Login"}
                     </button>
                 </form>
+                {/* ── OR Divider ── */}
+                <div className="flex items-center my-6">
+                    <div className="flex-1 h-px bg-gray-200"></div>
+                    <span className="px-4 text-sm text-gray-400 font-medium">OR</span>
+                    <div className="flex-1 h-px bg-gray-200"></div>
+                </div>
+                {/* ── Google Sign In Button ── */}
+                <div className="flex justify-center">
+                    <GoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={handleGoogleError}
+                        shape="rectangular"
+                        theme="outline"
+                        size="large"
+                        text="signin_with"
+                        width="100%"
+                    />
+                </div>
 
                 <p className="mt-8 text-center text-gray-600 text-sm">
                     Don't have an account?{" "}

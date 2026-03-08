@@ -15,6 +15,7 @@ interface AuthContextType {
     error: string | null;
     register: (name: string, email: string, password: string) => Promise<void>;
     login: (email: string, password: string) => Promise<void>;
+    googleAuth: (token: string) => Promise<void>;
     logout: () => void;
     clearError: () => void;
 }
@@ -101,6 +102,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const googleAuth = async (token: string) => {
+        setError(null);
+        try {
+            // Send the google credentials token to backend
+            const res = await api.post('/api/auth/google', { token });
+            setUser(res.data.user);
+        } catch (error: any) {
+            const msg = error.response?.data?.msg || "Google sign-in failed Try-again, Later"
+            setError(msg);
+            throw new Error(msg);
+        }
+    }
+
     const logout = async () => {
         try {
             await api.post("/api/auth/logout");
@@ -120,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return (
         <AuthContext.Provider
-            value={{ user, loading, error, register, login, logout, clearError }}
+            value={{ user, loading, error, register, login, googleAuth, logout, clearError }}
         >
             {children}
         </AuthContext.Provider>
