@@ -3,7 +3,7 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/hooks/useSocket";
-import { Copy, X, Mic, MicOff, Video, VideoOff, PhoneOff, Info, MessageSquare, Send } from "lucide-react";
+import { Copy, X, Mic, MicOff, Video, VideoOff, PhoneOff, Info, MessageSquare, Send, Monitor, MonitorOff } from "lucide-react";
 import { AuthContext } from "@/context/AuthContext";
 
 
@@ -33,6 +33,8 @@ export default function CallRoom() {
     // Chat Refs
     const chatEndRef = useRef<HTMLDivElement>(null);
     const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // ✅ Added: screen share ref
+    const screenStreamRef = useRef<MediaStream | null>(null);
 
 
     // ✅ FIX 1: ALL state before any returns
@@ -57,6 +59,8 @@ export default function CallRoom() {
     const [chatInput, setChatInput] = useState('')
     const [unreadCount, setUnreadCount] = useState(0);
     const [peerTyping, setPeerTyping] = useState(false);
+    // ✅ Added : screen share state
+    const [isScreenSharing, setIsScreenSharing] = useState(false);
 
     // ✅ FIX 1: ALL useEffects before any returns
     useEffect(() => {
@@ -355,6 +359,11 @@ export default function CallRoom() {
     };
 
     const handleEndCall = () => {
+        // ✅ Stop screen share stream too — clears browser's "sharing" indicator
+        screenStreamRef.current?.getTracks().forEach(t => t.stop());
+        screenStreamRef.current = null;
+
+
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((track) => track.stop());
         }
@@ -508,6 +517,78 @@ export default function CallRoom() {
         new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
 
+    // ✅ Screen Sharing 
+    const toggleScreenShare = async () => {
+        // stop screen sharing
+        if (isScreenSharing) {
+            //stop the screen stream
+            screenStreamRef.current?.getTracks().forEach(t => t.stop())
+            screenStreamRef.current = null;
+
+            // swap back to camera track in peer connection
+            const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
+            if (cameraTrack) {
+                const sender = peerConnectionRef.current?.getSenders().find(s => s.track?.kind === 'video');
+                if (sender) await sender.replaceTrack(cameraTrack);
+            }
+
+            // Restore camera in local preview
+            if (localVideoRef.current && localStreamRef.current) {
+                localVideoRef.current.srcObject = localStreamRef.current
+            }
+
+            // Re-enable camera track if it was previously on
+            localStreamRef.current?.getVideoTracks().forEach(t => t.enabled = true)
+            setIsScreenSharing(false)
+            setIsCameraOff(false);
+            return
+        }
+
+        // ── iOS check — getDisplayMedia not supported ─────────────────────────
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+            alert("Screen sharing is not supported on iOS Safari.");
+            return;
+        }
+
+        // ── START screen sharing ──────────────────────────────────────────────
+        try {
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { cursor: "always" } as any,
+                audio: false,
+            })
+
+            screenStreamRef.current = screenStream
+            const screenTrack = screenStream.getVideoTracks()[0];
+
+            // Replace camera track with screen track in peer connection
+            const sender = peerConnectionRef.current?.getSenders().find(s => s.track?.kind === "video");
+            if (sender) await sender.replaceTrack(screenTrack);
+
+            // show screen in local pip preview
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = new MediaStream([
+                    screenTrack,
+                    ...(localStreamRef.current?.getAudioTracks() || [])
+                ])
+            }
+
+            setIsScreenSharing(true);
+            setIsCameraOff(false) // keepo video element visible
+
+            // ✅ Auto-stop when user clicks browser's native "Stop sharing" button
+            screenTrack.onended = () => {
+                toggleScreenShare();
+            }
+        } catch (err: any) {
+            // User cancelled the picker — not an error worth alerting
+            if (err.name === "NotAllowedError") return;
+            console.error("Screen share failed:", err);
+            alert(`Screen sharing failed: ${err.message}`);
+        }
+
+    }
+
     // ✅ FIX 1: Early returns AFTER all hooks and functions
     if (loading) {
         return (
@@ -533,7 +614,7 @@ export default function CallRoom() {
                                 autoPlay
                                 playsInline
                                 muted
-                                className={`w-full h-full object-cover transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
+                                className={`w-full h-full object-cover ${isScreenSharing ? "block" : `transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}`}
                             />
                             {isCameraOff && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
@@ -603,8 +684,14 @@ export default function CallRoom() {
 
                 {/* Status badge */}
                 <div className={`absolute top-6 left-8 flex items-center gap-4 z-20 transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-                    <div className="bg-black/60 text-white px-5 py-2 rounded-lg text-sm font-medium backdrop-blur-md border border-white/10 shadow-sm">
+                    <div className="bg-black/60 text-white px-5 py-2 rounded-lg text-sm font-medium backdrop-blur-md border border-white/10 shadow-sm flex items-center gap-2">
                         {callStatus}
+                        {/* ✅ Screen sharing indicator in status bar */}
+                        {isScreenSharing && (
+                            <span className="flex items-center gap-1 bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                <Monitor className="w-3 h-3" /> Sharing
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -641,9 +728,9 @@ export default function CallRoom() {
                                 autoPlay
                                 playsInline
                                 muted
-                                className={`w-full h-full object-cover transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
+                                className={`w-full h-full object-cover ${isScreenSharing ? "block" : `transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}`}
                             />
-                            {isCameraOff && (
+                            {isCameraOff && !isScreenSharing && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-0">
                                     <div className="w-14 h-14 rounded-full bg-blue-500 shadow-lg flex items-center justify-center">
                                         <span className="text-2xl text-white font-medium">{userName.charAt(0).toUpperCase()}</span>
@@ -653,6 +740,11 @@ export default function CallRoom() {
                             <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-md z-10">
                                 You
                             </div>
+                            {isScreenSharing && (
+                                <div className="absolute top-2 left-2 bg-green-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md z-10 flex items-center gap-1 ">
+                                    <Monitor className="w-2.5 h-2.5" /> Sharing
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -735,6 +827,21 @@ export default function CallRoom() {
                         </svg>
                     </button>
 
+                    {/* ✅ Screen share button */}
+                    <button
+                        onClick={toggleScreenShare}
+                        className={`p-3 sm:p-4 rounded-full transition-all border ${isScreenSharing
+                            ? "bg-green-600 border-transparent text-white"
+                            : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"
+                            }`}
+                        title={isScreenSharing ? "Stop sharing screen" : "Share screen"}
+                    >
+                        {isScreenSharing
+                            ? <MonitorOff className="w-5 h-5 sm:w-6 sm:h-6" />
+                            : <Monitor className="w-5 h-5 sm:w-6 sm:h-6" />
+                        }
+                    </button>
+
                     {/* Invite / info */}
                     <button onClick={() => setShowInvitePopup(!showInvitePopup)} className={`p-3 sm:p-4 rounded-full transition-all border ${showInvitePopup ? "bg-blue-600 border-transparent text-white" : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"}`} title="Meeting details">
                         <Info className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -779,11 +886,8 @@ export default function CallRoom() {
 
                     <div className={`
                         flex flex-col bg-[#1e1f22] z-50
-                        /* Mobile: fixed sheet sliding up from bottom */
                         fixed bottom-0 left-0 right-0 h-[70vh] rounded-t-2xl border-t border-white/10
-                        /* Desktop: regular side panel in the row */
                         sm:static sm:h-auto sm:w-72 sm:rounded-none sm:border-t-0 sm:border-l sm:border-white/5 sm:shrink-0
-                        /* Slide-up animation on mobile */
                         animate-slideUp sm:animate-none
                     `}>
 
