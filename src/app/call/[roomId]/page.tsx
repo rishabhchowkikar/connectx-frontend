@@ -828,7 +828,7 @@ export default function CallRoom() {
                     </button>
 
                     {/* ✅ Screen share button */}
-                    {typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia() && (
+                    {typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia && (
                         <button
                             onClick={toggleScreenShare}
                             className={`p-3 sm:p-4 rounded-full transition-all border ${isScreenSharing
