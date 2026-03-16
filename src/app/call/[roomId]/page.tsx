@@ -545,11 +545,11 @@ export default function CallRoom() {
         }
 
         // ── iOS check — getDisplayMedia not supported ─────────────────────────
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        if (isIOS) {
-            alert("Screen sharing is not supported on iOS Safari.");
-            return;
-        }
+        // const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        // if (isIOS) {
+        //     alert("Screen sharing is not supported on iOS Safari.");
+        //     return;
+        // }
 
         // ── START screen sharing ──────────────────────────────────────────────
         try {
@@ -828,19 +828,21 @@ export default function CallRoom() {
                     </button>
 
                     {/* ✅ Screen share button */}
-                    <button
-                        onClick={toggleScreenShare}
-                        className={`p-3 sm:p-4 rounded-full transition-all border ${isScreenSharing
-                            ? "bg-green-600 border-transparent text-white"
-                            : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"
-                            }`}
-                        title={isScreenSharing ? "Stop sharing screen" : "Share screen"}
-                    >
-                        {isScreenSharing
-                            ? <MonitorOff className="w-5 h-5 sm:w-6 sm:h-6" />
-                            : <Monitor className="w-5 h-5 sm:w-6 sm:h-6" />
-                        }
-                    </button>
+                    {typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia() && (
+                        <button
+                            onClick={toggleScreenShare}
+                            className={`p-3 sm:p-4 rounded-full transition-all border ${isScreenSharing
+                                ? "bg-green-600 border-transparent text-white"
+                                : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"
+                                }`}
+                            title={isScreenSharing ? "Stop sharing screen" : "Share screen"}
+                        >
+                            {isScreenSharing
+                                ? <MonitorOff className="w-5 h-5 sm:w-6 sm:h-6" />
+                                : <Monitor className="w-5 h-5 sm:w-6 sm:h-6" />
+                            }
+                        </button>
+                    )}
 
                     {/* Invite / info */}
                     <button onClick={() => setShowInvitePopup(!showInvitePopup)} className={`p-3 sm:p-4 rounded-full transition-all border ${showInvitePopup ? "bg-blue-600 border-transparent text-white" : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"}`} title="Meeting details">
