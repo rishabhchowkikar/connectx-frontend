@@ -701,7 +701,7 @@ export default function CallRoom() {
                         ref={remoteVideoRef}
                         autoPlay
                         playsInline
-                        className={`absolute inset-0 w-full h-full object-cover ${remoteConnected ? "block" : "hidden"}`}
+                        className={`absolute inset-0 w-full h-full object-contain ${remoteConnected ? "block" : "hidden"}`}
                     />
 
                     {!remoteConnected && (
@@ -728,7 +728,7 @@ export default function CallRoom() {
                                 autoPlay
                                 playsInline
                                 muted
-                                className={`w-full h-full object-cover ${isScreenSharing ? "block" : `transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}`}
+                                className={`w-full h-full  ${isScreenSharing ? "object-contain block" : ` object-cover transform scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}`}
                             />
                             {isCameraOff && !isScreenSharing && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-0">
@@ -828,7 +828,7 @@ export default function CallRoom() {
                     </button>
 
                     {/* ✅ Screen share button */}
-                    {typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia && (
+                    {typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia && !/Android/i.test(navigator.userAgent) && (
                         <button
                             onClick={toggleScreenShare}
                             className={`p-3 sm:p-4 rounded-full transition-all border ${isScreenSharing
