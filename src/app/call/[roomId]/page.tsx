@@ -1924,6 +1924,7 @@
 
 
 // earlier version v2
+
 "use client";
 
 import React, { useContext, useEffect, useRef, useState } from "react";
@@ -1991,14 +1992,27 @@ export default function CallRoom() {
     const [linkCopied, setLinkCopied] = useState(false);
 
     // ── ICE config ────────────────────────────────────────────────────────────
-    const ICE_SERVERS = {
+    const ICE_SERVERS: RTCConfiguration = {
         iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" },
-            { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-            { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-            { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "stun:stun2.l.google.com:19302" },
+            { urls: "stun:stun3.l.google.com:19302" },
+            {
+                urls: [
+                    "turn:openrelay.metered.ca:80",
+                    "turn:openrelay.metered.ca:443",
+                    "turn:openrelay.metered.ca:443?transport=tcp",
+                    "turns:openrelay.metered.ca:443",
+                ],
+                username: "openrelayproject",
+                credential: "openrelayproject",
+            },
         ],
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: "all",
+        bundlePolicy: "max-bundle",
+        rtcpMuxPolicy: "require",
     };
 
     // ── useEffect: auth guard ─────────────────────────────────────────────────
@@ -2133,6 +2147,8 @@ export default function CallRoom() {
         }
     };
 
+
+
     // ── useEffect: init local media on mount ──────────────────────────────────
     useEffect(() => {
         initMedia();
@@ -2188,24 +2204,63 @@ export default function CallRoom() {
 
         const buildPeerConnection = () => {
             const pc = new RTCPeerConnection(ICE_SERVERS);
-            pc.onicecandidate = (e) => {
+
+            pc.onicecandidate = e => {
                 if (e.candidate) socket.emit("ice-candidate", e.candidate, roomId);
+            }
+
+            pc.oniceconnectionstatechange = () => {
+                console.log(`🧊 ICE state: ${pc.iceConnectionState}`);
+                if (pc.iceConnectionState === "failed") {
+                    console.warn("❌ ICE failed — restarting (Mac mDNS fallback)");
+                    pc.restartIce();
+                }
+                if (pc.iceConnectionState === "disconnected") {
+                    setTimeout(() => {
+                        if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
+                            console.warn("⚠️ ICE still disconnected after 3s — restarting");
+                            pc.restartIce();
+                        }
+                    }, 3000);
+                }
+            }
+
+            pc.onicegatheringstatechange = () => {
+                console.log("🧊 ICE gathering:", pc.iceGatheringState);
             };
-            pc.oniceconnectionstatechange = () => console.log("🧊 ICE:", pc.iceConnectionState);
-            pc.onicegatheringstatechange = () => console.log("🧊 Gathering:", pc.iceGatheringState);
+
+            pc.onconnectionstatechange = () => {
+                console.log("🔗 Connection state:", pc.connectionState);
+                if (pc.connectionState === "connected") {
+                    setCallStatus("Connected");
+                    setRemoteConnected(true);
+                }
+                if (pc.connectionState === "failed") {
+                    console.error("💀 PC failed — closing for rebuild");
+                    setRemoteConnected(false);
+                    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+                    pc.close();
+                    peerConnectionRef.current = null;
+                    setCallStatus("Connection failed — waiting for peer...");
+                }
+            };
+
             pc.ontrack = (e) => {
+                console.log("🎥 Got remote track:", e.track.kind);
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.srcObject = e.streams[0];
                     setCallStatus("Connected");
                     setRemoteConnected(true);
-                    setShowInvitePopup(false);
+                    setShowInvitePopup(false)
                 }
-            };
+            }
             localStreamRef.current?.getTracks().forEach(t =>
                 pc.addTrack(t, localStreamRef.current!)
             );
             return pc;
-        };
+        }
+
+        const pendingCandidates: RTCIceCandidateInit[] = []
 
         peerConnectionRef.current = buildPeerConnection();
 
@@ -2224,25 +2279,43 @@ export default function CallRoom() {
                 socket.emit("offer", offer, roomId);
             } catch (err) { console.error("Offer failed:", err); }
         };
-
-        const handleOffer = async (offer: any) => {
+        const handleOffer = async (offer: RTCSessionDescriptionInit) => {
             try {
                 await peerConnectionRef.current?.setRemoteDescription(offer);
+                // Flush any ICE candidates that arrived before the offer
+                for (const c of pendingCandidates) {
+                    await peerConnectionRef.current?.addIceCandidate(new RTCIceCandidate(c));
+                }
+                pendingCandidates.length = 0;
                 const answer = await peerConnectionRef.current?.createAnswer();
                 await peerConnectionRef.current?.setLocalDescription(answer);
                 socket.emit("answer", answer, roomId);
             } catch (err) { console.error("Answer failed:", err); }
         };
 
-        const handleAnswer = async (answer: any) => {
+        const handleAnswer = async (answer: RTCSessionDescriptionInit) => {
             try {
                 await peerConnectionRef.current?.setRemoteDescription(answer);
+                // Flush any ICE candidates that arrived before the answer
+                for (const c of pendingCandidates) {
+                    await peerConnectionRef.current?.addIceCandidate(new RTCIceCandidate(c));
+                }
+                pendingCandidates.length = 0;
             } catch (err) { console.error("Set remote answer failed:", err); }
         };
 
-        const handleIceCandidate = async (candidate: any) => {
+        const handleIceCandidate = async (candidate: RTCIceCandidateInit) => {
             try {
-                await peerConnectionRef.current?.addIceCandidate(candidate);
+                const pc = peerConnectionRef.current;
+                if (!pc) return;
+                if (pc.remoteDescription && pc.remoteDescription.type) {
+                    // Remote desc already set — add immediately
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } else {
+                    // Queue it — remote desc not ready yet
+                    console.log("⏳ Queuing ICE candidate (remote desc not set yet)");
+                    pendingCandidates.push(candidate);
+                }
             } catch (err) { console.error("ICE candidate failed:", err); }
         };
 
