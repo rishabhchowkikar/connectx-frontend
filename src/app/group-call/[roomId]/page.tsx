@@ -7,6 +7,8 @@ import { AuthContext } from "@/context/AuthContext";
 import {
     Mic, MicOff, Video, VideoOff, PhoneOff,
     Users, Check, X, Crown,
+    MessageSquare,
+    Send,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -22,10 +24,18 @@ interface WaitingUser {
     userName: string;
 }
 
+interface GroupChatMessage {
+    id: string
+    message: string
+    userName: string
+    timeStamp: number
+    isSelf: boolean
+}
+
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const COLORS = [
-    "#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981",
-    "#3b82f6","#ef4444","#14b8a6","#f97316","#a855f7",
+    "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981",
+    "#3b82f6", "#ef4444", "#14b8a6", "#f97316", "#a855f7",
 ];
 const getColor = (i: number) => COLORS[i % COLORS.length];
 
@@ -33,19 +43,19 @@ const getColor = (i: number) => COLORS[i % COLORS.length];
 function getGridConfig(total: number, mobile: boolean) {
     if (mobile) {
         if (total === 1) return { cols: 1, rows: 1 };
-        if (total <= 2)  return { cols: 1, rows: 2 };
-        if (total <= 4)  return { cols: 2, rows: 2 };
-        if (total <= 6)  return { cols: 2, rows: 3 };
-        return           { cols: 2, rows: Math.ceil(total / 2) };
+        if (total <= 2) return { cols: 1, rows: 2 };
+        if (total <= 4) return { cols: 2, rows: 2 };
+        if (total <= 6) return { cols: 2, rows: 3 };
+        return { cols: 2, rows: Math.ceil(total / 2) };
     }
-    if (total === 1)  return { cols: 1, rows: 1 };
-    if (total === 2)  return { cols: 2, rows: 1 };
-    if (total === 3)  return { cols: 3, rows: 1 };
-    if (total === 4)  return { cols: 2, rows: 2 };
-    if (total <= 6)   return { cols: 3, rows: 2 };
-    if (total <= 8)   return { cols: 4, rows: 2 };
-    if (total === 9)  return { cols: 3, rows: 3 };
-    return            { cols: 5, rows: 2 };
+    if (total === 1) return { cols: 1, rows: 1 };
+    if (total === 2) return { cols: 2, rows: 1 };
+    if (total === 3) return { cols: 3, rows: 1 };
+    if (total === 4) return { cols: 2, rows: 2 };
+    if (total <= 6) return { cols: 3, rows: 2 };
+    if (total <= 8) return { cols: 4, rows: 2 };
+    if (total === 9) return { cols: 3, rows: 3 };
+    return { cols: 5, rows: 2 };
 }
 
 function getOrphanStyle(idx: number, total: number, cols: number): React.CSSProperties {
@@ -87,10 +97,10 @@ function VideoTile({
         }
     }, [stream]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const bars       = [0.35, 0.65, 1, 0.7, 0.45];
+    const bars = [0.35, 0.65, 1, 0.7, 0.45];
     const avatarSize = compact ? 38 : 54;
-    const fs         = compact ? 10 : 12;
-    const showVideo  = !isCamOff && (!!stream || isLocal);
+    const fs = compact ? 10 : 12;
+    const showVideo = !isCamOff && (!!stream || isLocal);
 
     return (
         <div
@@ -239,33 +249,44 @@ function VideoTile({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function GroupCallRoom() {
-    const { roomId }  = useParams<{ roomId: string }>();
-    const router      = useRouter();
-    const socket      = useSocket();
-    const auth        = useContext(AuthContext);
+    const { roomId } = useParams<{ roomId: string }>();
+    const router = useRouter();
+    const socket = useSocket();
+    const auth = useContext(AuthContext);
     const { user, loading } = auth || {};
-    const userName    = (!auth?.loading && auth?.user?.name) ? auth.user.name : "Guest";
+    const userName = (!auth?.loading && auth?.user?.name) ? auth.user.name : "Guest";
 
     // ── Refs ──────────────────────────────────────────────────────────────────
-    const localVideoRef      = useRef<HTMLVideoElement>(null);
-    const localStreamRef     = useRef<MediaStream | null>(null);
+    const localVideoRef = useRef<HTMLVideoElement>(null);
+    const localStreamRef = useRef<MediaStream | null>(null);
     const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
 
+    // Chat related refs
+    const chatEndRef = useRef<HTMLDivElement>(null)
+    const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
     // ── State ─────────────────────────────────────────────────────────────────
-    const [isMuted,          setIsMuted]          = useState(false);
-    const [isCameraOff,      setIsCameraOff]      = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [isCameraOff, setIsCameraOff] = useState(false);
     const [mediaStreamReady, setMediaStreamReady] = useState(false);
     // ✅ hasJoined triggers socket effect once. roomState only controls which screen to render.
-    const [hasJoined,        setHasJoined]        = useState(false);
-    const [roomState,        setRoomState]        = useState<"preview" | "waiting" | "in-call">("preview");
-    const [isAdmin,          setIsAdmin]          = useState(false);
-    const [adminName,        setAdminName]        = useState("");
-    const [participants,     setParticipants]     = useState<Participant[]>([]);
-    const [waitingUsers,     setWaitingUsers]     = useState<WaitingUser[]>([]);
-    const [callStatus,       setCallStatus]       = useState("Connecting...");
+    const [hasJoined, setHasJoined] = useState(false);
+    const [roomState, setRoomState] = useState<"preview" | "waiting" | "in-call">("preview");
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [adminName, setAdminName] = useState("");
+    const [participants, setParticipants] = useState<Participant[]>([]);
+    const [waitingUsers, setWaitingUsers] = useState<WaitingUser[]>([]);
+    const [callStatus, setCallStatus] = useState("Connecting...");
     const [showWaitingPanel, setShowWaitingPanel] = useState(true);
-    const [speakIdx,         setSpeakIdx]         = useState(0);
-    const [isMobile,         setIsMobile]         = useState(false);
+    const [speakIdx, setSpeakIdx] = useState(0);
+    const [isMobile, setIsMobile] = useState(false);
+
+    // ── Group chat state ──────────────────────────────────────────────────
+    const [showChat, setShowChat] = useState(false);
+    const [chatMessage, setChatMessage] = useState<GroupChatMessage[]>([]);
+    const [chatInput, setChatInput] = useState("")
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [peerTyping, setPeerTyping] = useState<string | null>(null);
 
     // ── Detect mobile ─────────────────────────────────────────────────────────
     useEffect(() => {
@@ -314,6 +335,8 @@ export default function GroupCallRoom() {
         }
     }, [roomState]);
 
+
+
     // ── Create RTCPeerConnection ───────────────────────────────────────────────
     const createPeerConnection = useCallback((targetId: string): RTCPeerConnection => {
         const pc = new RTCPeerConnection({
@@ -356,7 +379,7 @@ export default function GroupCallRoom() {
         };
 
         pc.oniceconnectionstatechange = () => {
-            console.log(`🧊 ICE [${targetId.slice(0,8)}]:`, pc.iceConnectionState);
+            console.log(`🧊 ICE [${targetId.slice(0, 8)}]:`, pc.iceConnectionState);
         };
 
         peerConnectionsRef.current.set(targetId, pc);
@@ -417,7 +440,7 @@ export default function GroupCallRoom() {
             socketId: newId, userName: newName,
         }: { socketId: string; userName: string }) => {
             setParticipants(prev => [...prev, { socketId: newId, userName: newName }]);
-            const pc    = createPeerConnection(newId);
+            const pc = createPeerConnection(newId);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             socket.emit("group-offer", { offer, targetId: newId, roomId });
@@ -463,6 +486,26 @@ export default function GroupCallRoom() {
             setCallStatus("You are now the host");
         });
 
+        socket.on("group-chat-message", ({ message, userName: fromName, timeStamp }: {
+            message: string; userName: string; timeStamp: number
+        }) => {
+            const ts = timeStamp ?? Date.now();
+            setChatMessage(prev => [...prev, {
+                id: `${ts}-${Math.random()}`,
+                message, userName: fromName, timeStamp: ts, isSelf: false
+            }])
+            setShowChat(current => {
+                if (!current) setUnreadCount(c => c + 1);
+                return current
+            })
+        })
+
+        socket.on("group-chat-typing", ({ userName: typingName, isTyping }: {
+            userName: string, isTyping: boolean
+        }) => {
+            setPeerTyping(isTyping ? typingName : null);
+        })
+
         return () => {
             socket.off("group-joined");
             socket.off("waiting-for-admission");
@@ -476,11 +519,21 @@ export default function GroupCallRoom() {
             socket.off("group-ice-candidate");
             socket.off("group-peer-left");
             socket.off("group-you-are-admin");
+            socket.off("group-chat-message");
+            socket.off("group-chat-typing");
             peerConnectionsRef.current.forEach(pc => pc.close());
             peerConnectionsRef.current.clear();
         };
-    // ✅ roomState intentionally NOT here — effect must not re-run on screen changes
+        // ✅ roomState intentionally NOT here — effect must not re-run on screen changes
     }, [socket, hasJoined, mediaStreamReady, roomId, userName, createPeerConnection, router]);
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    }, [chatMessage])
+
+    useEffect(() => {
+        if (showChat) setUnreadCount(0)
+    }, [showChat])
 
     // ── Admin actions ─────────────────────────────────────────────────────────
     const admitUser = (socketId: string) => {
@@ -515,6 +568,33 @@ export default function GroupCallRoom() {
         socket?.disconnect();
         router.push("/dashboard/group-calling");
     };
+
+    // ── Group chat helpers ────────────────────────────────────────────────
+    const sendGroupMessage = () => {
+        const msg = chatInput.trim();
+        if (!msg || !socket) return;
+        const timeStamp = Date.now();
+        socket.emit("group-chat-message", { roomId, message: msg, userName, timeStamp });
+        setChatMessage(prev => [...prev, {
+            id: `${timeStamp}-self`, message: msg, userName, timeStamp, isSelf: true
+        }])
+        setChatInput("");
+        socket.emit("group-chat-typing", { roomId, userName, isTyping: false });
+        if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+    }
+
+    const handleGroupChatInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setChatInput(e.target.value);
+        if (!socket) return;
+        socket.emit('group-chat-typing', { roomId, userName, isTyping: true });
+        if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = setTimeout(() => {
+            socket.emit("group-chat-typing", { roomId, userName, isTyping: false })
+        }, 1500);
+    }
+
+    const formatGroupTime = (ts: number) =>
+        new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
     // ── Auth loading ──────────────────────────────────────────────────────────
     if (loading) {
@@ -659,21 +739,22 @@ export default function GroupCallRoom() {
     // =========================================================================
     // IN-CALL SCREEN
     // =========================================================================
-    const totalTiles  = participants.length + 1;
+    const totalTiles = participants.length + 1;
     const { cols, rows } = getGridConfig(totalTiles, isMobile);
-    const compact     = totalTiles >= 7;
+    const compact = totalTiles >= 7;
     const allowScroll = isMobile && totalTiles > 6;
 
     return (
         <div style={{ height: "100vh", background: "#101115", color: "white", display: "flex", flexDirection: "column", fontFamily: "system-ui,sans-serif" }}>
             <style>{`
-                *{box-sizing:border-box}
-                @keyframes audioBar{from{transform:scaleY(.45)}to{transform:scaleY(1)}}
-                @keyframes speakPulse{0%,100%{opacity:.65}50%{opacity:1}}
-                @keyframes breathe{0%,100%{opacity:.5}50%{opacity:1}}
-                ::-webkit-scrollbar{width:3px}
-                ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
-            `}</style>
+            *{box-sizing:border-box}
+            @keyframes audioBar{from{transform:scaleY(.45)}to{transform:scaleY(1)}}
+            @keyframes speakPulse{0%,100%{opacity:.65}50%{opacity:1}}
+            @keyframes breathe{0%,100%{opacity:.5}50%{opacity:1}}
+            @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+            ::-webkit-scrollbar{width:3px}
+            ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+        `}</style>
 
             {/* ── Top bar ─────────────────────────────────────────────────────── */}
             <div style={{ flexShrink: 0, height: 48, background: "#18191c", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px" }}>
@@ -780,18 +861,104 @@ export default function GroupCallRoom() {
                         )}
                     </div>
                 )}
+                {showChat && (
+                    <div className="w-[272px] bg-[#18191c] border-l border-white/[0.06] flex flex-col shrink-0 min-h-0">
+                        {/* Header */}
+                        <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between shrink-0">
+                            <span className="text-white font-semibold text-[13px] flex items-center gap-1.5">
+                                <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                                Group Chat
+                            </span>
+                            <button onClick={() => setShowChat(false)} className="bg-transparent border-none text-gray-500 hover:text-gray-300 cursor-pointer flex">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Messages */}
+                        <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2" style={{ scrollbarWidth: "thin" }}>
+                            {chatMessage.length === 0 && (
+                                <div className="text-center text-gray-600 text-[13px] mt-10">
+                                    No messages yet. Say hello! 👋
+                                </div>
+                            )}
+                            {chatMessage.map(msg => (
+                                <div key={msg.id} className={`flex flex-col ${msg.isSelf ? "items-end" : "items-start"}`}>
+                                    <span className="text-[10px] text-gray-600 mb-1 px-1">
+                                        {msg.isSelf ? "You" : msg.userName} · {formatGroupTime(msg.timeStamp)}
+                                    </span>
+                                    <div className={`max-w-[85%] px-3 py-2 text-[13px] text-white leading-snug break-words ${msg.isSelf
+                                        ? "bg-indigo-600 rounded-2xl rounded-br-sm"
+                                        : "bg-white/10 rounded-2xl rounded-bl-sm"
+                                        }`}>
+                                        {msg.message}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Typing indicator */}
+                            {peerTyping && (
+                                <div className="flex flex-col items-start">
+                                    <span className="text-[10px] text-gray-600 mb-1 px-1">{peerTyping} is typing…</span>
+                                    <div className="bg-white/10 rounded-2xl rounded-bl-sm px-3 py-2 flex items-center gap-1">
+                                        {[0, 1, 2].map(i => (
+                                            <span
+                                                key={i}
+                                                className="w-1.5 h-1.5 rounded-full bg-gray-500 inline-block"
+                                                style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={chatEndRef} />
+                        </div>
+
+                        {/* Input */}
+                        <div className="px-3 py-3 border-t border-white/[0.06] flex gap-2 shrink-0">
+                            <input
+                                type="text"
+                                value={chatInput}
+                                onChange={handleGroupChatInput}
+                                onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendGroupMessage()}
+                                placeholder="Type a message…"
+                                className="flex-1 bg-white/[0.06] border border-white/10 rounded-xl px-3 py-2 text-white text-[13px] outline-none placeholder-gray-600 focus:border-indigo-500 transition-colors"
+                            />
+                            <button
+                                onClick={sendGroupMessage}
+                                disabled={!chatInput.trim()}
+                                className={`w-9 h-9 rounded-xl border-none flex items-center justify-center shrink-0 transition-colors ${chatInput.trim() ? "bg-indigo-600 hover:bg-indigo-700 cursor-pointer" : "bg-white/[0.05] cursor-not-allowed"}`}
+                            >
+                                <Send className="w-3.5 h-3.5 text-white" />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
+
+
 
             {/* ── Controls ─────────────────────────────────────────────────────── */}
             <div style={{ flexShrink: 0, height: 68, background: "#18191c", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
                 {[
-                    { Icon: isMuted ? MicOff : Mic,         active: isMuted,    fn: toggleMute },
+                    { Icon: isMuted ? MicOff : Mic, active: isMuted, fn: toggleMute },
                     { Icon: isCameraOff ? VideoOff : Video, active: isCameraOff, fn: toggleCamera },
                 ].map(({ Icon, active, fn }, i) => (
                     <button key={i} onClick={fn} style={{ width: 46, height: 46, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: active ? "#ef4444" : "rgba(255,255,255,0.07)", border: active ? "none" : "1px solid rgba(255,255,255,0.12)", color: "white", cursor: "pointer", transition: "all 0.15s" }}>
                         <Icon style={{ width: 18, height: 18 }} />
                     </button>
                 ))}
+
+                <button
+                    onClick={() => setShowChat(v => !v)}
+                    className={`w-11 h-11 rounded-full flex items-center justify-center text-white cursor-pointer transition-all relative ${showChat ? "bg-indigo-600 border-none" : "bg-white/[0.07] border border-white/[0.12]"}`}
+                >
+                    <MessageSquare className="w-4 h-4" />
+                    {unreadCount > 0 && !showChat && (
+                        <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border-2 border-[#18191c]">
+                            {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                    )}
+                </button>
                 <button onClick={handleEndCall} style={{ height: 46, padding: "0 20px", borderRadius: 23, display: "flex", alignItems: "center", gap: 8, background: "#ef4444", color: "white", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
                     <PhoneOff style={{ width: 16, height: 16 }} />Leave
                 </button>
