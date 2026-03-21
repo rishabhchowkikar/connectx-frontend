@@ -1990,6 +1990,10 @@ export default function CallRoom() {
     const [mediaError, setMediaError] = useState<string | null>(null);
     // FIX 1: copied state for invite link button
     const [linkCopied, setLinkCopied] = useState(false);
+    // ── Reactions ─────────────────────────────────────────────────────────
+    const [reactions, setReactions] = useState<{ id: string; emoji: string; fromSelf: boolean }[]>([]);
+    const [showReactionPicker, setShowReactionPicker] = useState(false);
+    const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "👏", "🔥"];
 
     // ── ICE config ────────────────────────────────────────────────────────────
     const ICE_SERVERS: RTCConfiguration = {
@@ -2376,6 +2380,12 @@ export default function CallRoom() {
 
         socket.on("chat-typing", ({ isTyping }: { isTyping: boolean }) => setPeerTyping(isTyping));
 
+        socket.on("receive-reaction", ({ emoji }: { emoji: string }) => {
+            const id = `${Date.now()}-peer`;
+            setReactions(prev => [...prev, { id, emoji, fromSelf: false }]);
+            setTimeout(() => setReactions(prev => prev.filter(r => r.id !== id)), 3000);
+        });
+
         socket.emit("join-room", { roomId, userName });
 
         return () => {
@@ -2390,6 +2400,7 @@ export default function CallRoom() {
             socket.off("user-disconnected", handleUserDisconnected);
             socket.off("chat-message");
             socket.off("chat-typing");
+            socket.off("receive-reaction");
         };
     }, [socket, roomId, router, hasJoined, mediaStreamReady]);
 
@@ -2431,6 +2442,19 @@ export default function CallRoom() {
             setTimeout(() => setLinkCopied(false), 2000);
         });
     };
+    // ── Send reaction ─────────────────────────────────────────────────────
+    const sendReaction = (emoji: string) => {
+        if (!socket) return;
+        const id = `${Date.now()}-self`;
+        setReactions(prev => [...prev, { id, emoji, fromSelf: true }]);
+
+        setTimeout(() => {
+            setReactions(prev => prev.filter(r => r.id !== id))
+        }, 3000);
+
+        socket.emit("send-reaction", { roomId, emoji });
+        setShowReactionPicker(false)
+    }
 
     // ── Switch camera / mic ───────────────────────────────────────────────────
     const switchDevice = async (deviceId: string, kind: "video" | "audio") => {
@@ -2773,6 +2797,20 @@ export default function CallRoom() {
                 </div>
             )}
 
+            {/* ── Floating reactions overlay ── */}
+            {reactions.map(r => (
+                <div
+                    key={r.id}
+                    className={`absolute z-50 text-4xl pointer-events-none select-none reaction-float ${r.fromSelf
+                        ? "right-32 sm:right-64 bottom-24"
+                        : "left-6 bottom-24"
+                        }`}
+                >
+                    {r.emoji}
+                </div>
+            ))}
+
+
             {/* ── Floating controls bar — fixed to bottom, fades in/out ── */}
             <div className={`absolute bottom-0 left-0 right-0 z-40 transition-all duration-500 ${showControls ? "opacity-100 translate-y-0" : "opacity-0 translate-y-full pointer-events-none"}`}>
                 {/* Gradient scrim so buttons are always readable over video */}
@@ -2857,6 +2895,34 @@ export default function CallRoom() {
                             </span>
                         )}
                     </button>
+
+                    {remoteConnected && (
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowReactionPicker(v => !v)}
+                                className={`p-3 sm:p-4 rounded-full transition-all border text-lg ${showReactionPicker
+                                    ? "bg-blue-600 border-transparent text-white"
+                                    : "bg-[#3c4043]/90 backdrop-blur-md border-white/10 hover:bg-[#4d5155] text-white shadow-xl"
+                                    }`}
+                                title="Send reaction"
+                            >
+                                😊
+                            </button>
+                            {showReactionPicker && (
+                                <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 bg-[#2d2d30]/95 backdrop-blur-md border border-gray-700 rounded-2xl px-3 py-2.5 shadow-2xl z-50">
+                                    {REACTION_EMOJIS.map(emoji => (
+                                        <button
+                                            key={emoji}
+                                            onClick={() => sendReaction(emoji)}
+                                            className="text-2xl hover:scale-125 transition-transform duration-150 active:scale-95"
+                                        >
+                                            {emoji}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* End call */}
                     <button onClick={handleEndCall} className="p-3 sm:p-4 sm:px-7 bg-[#ea4335] hover:bg-red-600 text-white font-medium rounded-full transition-all shadow-xl sm:ml-2 border border-transparent flex items-center gap-2">
@@ -2946,6 +3012,14 @@ export default function CallRoom() {
                 }
                 .animate-fadeIn {
                     animation: fadeIn 0.2s ease-out;
+                }
+                    @keyframes reactionFloat {
+                0%   { opacity: 1; transform: translateY(0) scale(1); }
+                60%  { opacity: 1; transform: translateY(-80px) scale(1.2); }
+                100% { opacity: 0; transform: translateY(-140px) scale(0.8); }
+                            }
+                .reaction-float {
+                    animation: reactionFloat 3s ease-out forwards;
                 }
             `}</style>
         </div>
