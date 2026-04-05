@@ -966,6 +966,7 @@
 //         </div>
 //     );
 // }
+
 "use client";
 
 import { useContext, useEffect, useRef, useState, useCallback } from "react";
@@ -1194,6 +1195,7 @@ export default function GroupCallRoom() {
     const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
     const chatEndRef = useRef<HTMLDivElement>(null);
     const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const participantsRef = useRef<Participant[]>([]);
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [isMuted, setIsMuted] = useState(false);
@@ -1279,6 +1281,10 @@ export default function GroupCallRoom() {
     useEffect(() => {
         if (showChat) setUnreadCount(0);
     }, [showChat]);
+
+    useEffect(() => {
+        participantsRef.current = participants;
+    }, [participants]);
 
     // ── Create RTCPeerConnection ───────────────────────────────────────────────
     const createPeerConnection = useCallback((targetId: string): RTCPeerConnection => {
@@ -1437,7 +1443,7 @@ export default function GroupCallRoom() {
         socket.on("group-reaction", ({
             emoji, userName: fromName, socketId: fromId,
         }: { emoji: string; userName: string; socketId: string }) => {
-            const tileIndex = participants.findIndex(p => p.socketId === fromId);
+            const tileIndex = participantsRef.current.findIndex(p => p.socketId === fromId);
             addFloatingReaction(emoji, fromName, tileIndex === -1 ? 0 : tileIndex + 1);
         });
 
@@ -1485,7 +1491,7 @@ export default function GroupCallRoom() {
             peerConnectionsRef.current.forEach(pc => pc.close());
             peerConnectionsRef.current.clear();
         };
-    }, [socket, hasJoined, mediaStreamReady, roomId, userName, createPeerConnection, router, participants]);
+    }, [socket, hasJoined, mediaStreamReady, roomId, userName, createPeerConnection, router]);
 
     // ── Admin actions ─────────────────────────────────────────────────────────
     const admitUser = (socketId: string) => {
