@@ -298,7 +298,10 @@ export default function GroupCallRoom() {
                     audio: true,
                 });
                 localStreamRef.current = stream;
-                if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+                if (localVideoRef.current) {
+                    localVideoRef.current.srcObject = stream;
+                    localVideoRef.current.play().catch(() => { }); // force play on mobile
+                }
                 setMediaStreamReady(true);
                 // Enumerate all devices
 
@@ -319,6 +322,7 @@ export default function GroupCallRoom() {
     useEffect(() => {
         if (localVideoRef.current && localStreamRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
+            localVideoRef.current.play().catch(() => { });
         }
     }, [roomState]);
 
@@ -588,34 +592,63 @@ export default function GroupCallRoom() {
         if (isSwitchingDevice || currentVideoId === deviceId) return;
         setIsSwitchingDevice(true);
         try {
+            // Find the device to determine facingMode for mobile
+            const device = videoDevices.find(d => d.deviceId === deviceId);
+            const label = device?.label?.toLowerCase() || "";
+
+            // Mobile browsers work better with facingMode than exact deviceId
+            // Detect front/back from label since mobile deviceIds are often unreliable
+            const isFront = label.includes("front") || label.includes("user") || label.includes("facetime");
+            const isBack = label.includes("back") || label.includes("rear") || label.includes("environment");
+
+            let videoConstraint: MediaTrackConstraints;
+
+            if (isMobile && (isFront || isBack)) {
+                // Use facingMode on mobile — much more reliable
+                videoConstraint = { facingMode: isBack ? "environment" : "user" };
+            } else if (deviceId && deviceId !== "default" && deviceId !== "") {
+                // Desktop or known deviceId — use exact
+                videoConstraint = { deviceId: { exact: deviceId } };
+            } else {
+                // Fallback — try ideal instead of exact (won't throw if not found)
+                videoConstraint = { deviceId: { ideal: deviceId } };
+            }
+
             const newStream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: deviceId } },
-                audio: false
+                video: videoConstraint,
+                audio: false,
             });
+
             const newTrack = newStream.getVideoTracks()[0];
 
-            // Replace in all peer connections - no renegotiation neededs
+            // Replace in all peer connections — no renegotiation needed
             await Promise.all(
                 Array.from(peerConnectionsRef.current.values()).map(pc => {
                     const sender = pc.getSenders().find(s => s.track?.kind === "video");
                     return sender ? sender.replaceTrack(newTrack) : Promise.resolve();
                 })
-            )
+            );
 
-            // stop old video trach
+            // Stop old video track
             localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
             localStreamRef.current?.getVideoTracks().forEach(t => localStreamRef.current!.removeTrack(t));
             localStreamRef.current?.addTrack(newTrack);
 
-            if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+            // Force re-attach to video element
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = null;
+                localVideoRef.current.srcObject = localStreamRef.current;
+                localVideoRef.current.play().catch(() => { });
+            }
+
             setCurrentVideoId(deviceId);
             if (isCameraOff) setIsCameraOff(false);
-        } catch (error) {
-            console.log("Video switch failed:", error)
+        } catch (err) {
+            console.error("Video switch failed:", err);
         } finally {
             setIsSwitchingDevice(false);
         }
-    }
+    };
 
 
     // ── Switch audio input (microphone) ─────────────────────────────────────────
@@ -738,7 +771,9 @@ export default function GroupCallRoom() {
                     <div className="flex-1 min-w-[340px] max-w-[560px]">
                         <div className="relative aspect-video bg-[#1e1f22] rounded-[18px] overflow-hidden border border-white/10 shadow-[0_24px_48px_rgba(0,0,0,0.5)]">
                             <video ref={localVideoRef} autoPlay playsInline muted
-                                className={`absolute inset-0 w-full h-full object-cover scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`} />
+                                className={`absolute inset-0 w-full h-full object-cover scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
+                                style={{ WebkitPlaysinline: true } as React.CSSProperties}
+                            />
                             {isCameraOff && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-[#1e1f22]">
                                     <div className="w-[88px] h-[88px] rounded-full bg-indigo-600 flex items-center justify-center">
@@ -801,7 +836,9 @@ export default function GroupCallRoom() {
                     <p className="text-gray-600 text-[13px] mb-7">Please wait for the host to admit you.</p>
                     <div className="relative aspect-video bg-[#1e1f22] rounded-2xl overflow-hidden border border-white/[0.08] mb-6">
                         <video ref={localVideoRef} autoPlay playsInline muted
-                            className={`absolute inset-0 w-full h-full object-cover scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`} />
+                            className={`absolute inset-0 w-full h-full object-cover scale-x-[-1] ${isCameraOff ? "hidden" : "block"}`}
+                            style={{ WebkitPlaysinline: true } as React.CSSProperties}
+                        />
                         {isCameraOff && (
                             <div className="absolute inset-0 flex items-center justify-center">
                                 <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center">
@@ -1099,7 +1136,14 @@ export default function GroupCallRoom() {
                                         >
                                             <span className="text-base">📷</span>
                                             <span className="flex-1 truncate">
-                                                {device.label || `Camera ${i + 1}`}
+                                                {device.label
+                                                    ? device.label
+                                                    : i === 0
+                                                        ? "Front Camera"
+                                                        : i === 1
+                                                            ? "Back Camera"
+                                                            : `Camera ${i + 1}`
+                                                }
                                             </span>
                                             {currentVideoId === device.deviceId && (
                                                 <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">Active</span>
