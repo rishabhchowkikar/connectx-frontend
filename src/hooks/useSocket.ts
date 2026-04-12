@@ -8,13 +8,15 @@ export const useSocket = () => {
     useEffect(() => {
         const socket_url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
         const newSocket = io(socket_url, {
-            transports: ["websocket"],
+            transports: ["websocket", "polling"],
             reconnection: true,
-            reconnectionAttempts: 5,
+            reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
         });
 
         socketRef.current = newSocket;
+        setSocket(newSocket)
 
         newSocket.on("connect", () => {
             console.log(`Socket Connected: ${newSocket.id}`);
@@ -24,7 +26,7 @@ export const useSocket = () => {
         newSocket.on("disconnect", (reason) => {
             console.log("❌ Socket Disconnected — reason:", reason); // ← reason tells us WHY
             console.log("Socket Disconnected");
-            setSocket(null);
+            // setSocket(null);
         });
 
         return () => {
