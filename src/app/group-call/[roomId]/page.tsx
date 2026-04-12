@@ -231,6 +231,8 @@ export default function GroupCallRoom() {
     const chatEndRef = useRef<HTMLDivElement>(null);
     const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const participantsRef = useRef<Participant[]>([]);
+    const hasEmittedJoinRef = useRef(false);
+    const roomStateRef = useRef<"preview" | "waiting" | "in-call">("preview");
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [isMuted, setIsMuted] = useState(false);
@@ -346,6 +348,10 @@ export default function GroupCallRoom() {
         participantsRef.current = participants;
     }, [participants]);
 
+    useEffect(() => {
+        roomStateRef.current = roomState;
+    }, [roomState]);
+
     // ── Create RTCPeerConnection ───────────────────────────────────────────────
     const createPeerConnection = useCallback((targetId: string): RTCPeerConnection => {
         const pc = new RTCPeerConnection({
@@ -381,7 +387,18 @@ export default function GroupCallRoom() {
         };
 
         pc.oniceconnectionstatechange = () => {
-            console.log(`🧊 ICE [${targetId.slice(0, 8)}]:`, pc.iceConnectionState);
+            const state = pc.iceConnectionState;
+            console.log(`🧊 ICE [${targetId.slice(0, 8)}]:`, state);
+            if (state === "failed") {
+                pc.createOffer({ iceRestart: true })
+                    .then(offer => pc.setLocalDescription(offer))
+                    .then(() => socket?.emit("group-offer", {
+                        offer: pc.localDescription!,
+                        targetId,
+                        roomId,
+                    }))
+                    .catch(console.error);
+            }
         };
 
         peerConnectionsRef.current.set(targetId, pc);
@@ -392,7 +409,17 @@ export default function GroupCallRoom() {
     useEffect(() => {
         if (!socket || !hasJoined || !mediaStreamReady) return;
 
-        socket.emit("join-group-room", { roomId, userName });
+        if (!hasEmittedJoinRef.current) {
+            hasEmittedJoinRef.current = true;
+            socket.emit("join-group-room", { roomId, userName });
+        }
+
+        socket.on("connect", () => {
+            const state = roomStateRef.current;
+            if (state === "in-call" || state === "waiting") {
+                socket.emit("join-group-room", { roomId, userName });
+            }
+        });
 
         socket.on("group-joined", ({ isAdmin: admin }: { isAdmin: boolean }) => {
             setIsAdmin(admin);
@@ -548,6 +575,7 @@ export default function GroupCallRoom() {
             socket.off("group-reaction");
             socket.off("group-hand-raised");
             socket.off("group-mute-all");
+            socket.off("connect");
             peerConnectionsRef.current.forEach(pc => pc.close());
             peerConnectionsRef.current.clear();
         };
