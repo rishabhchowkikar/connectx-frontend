@@ -596,7 +596,6 @@ export default function GroupCallRoom() {
         if (isSwitchingDevice) return;
         setIsSwitchingDevice(true);
         try {
-            // Determine constraint — facingMode for mobile, exact deviceId for desktop
             const device = videoDevices.find(d => d.deviceId === deviceId);
             const label = (device?.label || "").toLowerCase();
             const isBack = label.includes("back") || label.includes("rear") || label.includes("environment");
@@ -608,7 +607,6 @@ export default function GroupCallRoom() {
             } else if (isMobile && isFront) {
                 videoConstraint = { facingMode: "user" };
             } else if (isMobile) {
-                // Mobile but label unrecognized — toggle from current
                 const currentFacing = localStreamRef.current
                     ?.getVideoTracks()[0]?.getSettings().facingMode;
                 videoConstraint = { facingMode: currentFacing === "environment" ? "user" : "environment" };
@@ -616,14 +614,27 @@ export default function GroupCallRoom() {
                 videoConstraint = { deviceId: { exact: deviceId } };
             }
 
-            // Get new video track
+            // Get new video stream
             const newVideoStream = await navigator.mediaDevices.getUserMedia({
                 video: videoConstraint,
                 audio: false,
             });
             const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-            // Step 1: Replace track in ALL peer connections first (no renegotiation)
+            // Wait for the track to be truly live before doing anything
+            // This prevents the black screen on Android when switching to back camera
+            await new Promise<void>((resolve) => {
+                if (newVideoTrack.readyState === "live") {
+                    resolve();
+                    return;
+                }
+                const onLive = () => { newVideoTrack.removeEventListener("unmute", onLive); resolve(); };
+                newVideoTrack.addEventListener("unmute", onLive);
+                // Safety timeout — resolve after 800ms regardless
+                setTimeout(resolve, 800);
+            });
+
+            // Replace track in ALL peer connections (no renegotiation)
             await Promise.all(
                 Array.from(peerConnectionsRef.current.values()).map(pc => {
                     const sender = pc.getSenders().find(s => s.track?.kind === "video");
@@ -631,24 +642,28 @@ export default function GroupCallRoom() {
                 })
             );
 
-            // Step 2: Stop old video track
-            localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
+            // Stop old video track AFTER replacing in peer connections
+            const oldTracks = localStreamRef.current?.getVideoTracks() || [];
+            oldTracks.forEach(t => t.stop());
 
-            // Step 3: Build a BRAND NEW MediaStream — do NOT mutate the old one
-            // This is the key fix: new stream reference forces React to re-render VideoTile
+            // Build brand new MediaStream with existing audio + new video
             const audioTracks = localStreamRef.current?.getAudioTracks() || [];
             const newStream = new MediaStream([...audioTracks, newVideoTrack]);
+
+            // Replace the ref
             localStreamRef.current = newStream;
 
-            // Step 4: Re-attach to local video element
+            // Detach first, then reattach — forces browser to fully re-initialize
             if (localVideoRef.current) {
+                localVideoRef.current.srcObject = null;
+                // Small yield — lets the browser process the null assignment
+                await new Promise(r => setTimeout(r, 50));
                 localVideoRef.current.srcObject = newStream;
-                localVideoRef.current.play().catch(() => { });
+                await localVideoRef.current.play().catch(() => { });
             }
 
-            // Step 5: Bump version so VideoTile re-reads the ref
-            setLocalStreamVersion(v => v + 1);
             setCurrentVideoId(deviceId);
+            setLocalStreamVersion(v => v + 1);
             if (isCameraOff) setIsCameraOff(false);
 
         } catch (err: any) {
