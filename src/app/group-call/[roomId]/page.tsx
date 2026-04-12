@@ -78,7 +78,7 @@ function getOrphanStyle(idx: number, total: number, cols: number): React.CSSProp
 function VideoTile({
     name, color, isLocal, isAdmin, isMuted, isCamOff,
     isActive, compact, stream, videoRef, handRaised, reactions,
-    streamVersion
+    streamVersion, isBackCamera
 }: {
     name: string;
     color: string;
@@ -93,6 +93,7 @@ function VideoTile({
     handRaised?: boolean;
     reactions?: FloatingReaction[];
     streamVersion?: number;
+    isBackCamera?: boolean
 }) {
     const internalRef = useRef<HTMLVideoElement>(null);
     const ref = (videoRef ?? internalRef) as React.RefObject<HTMLVideoElement>;
@@ -124,7 +125,7 @@ function VideoTile({
                 ref={ref}
                 autoPlay playsInline muted={isLocal}
                 className="absolute inset-0 w-full h-full object-cover"
-                style={{ transform: isLocal ? "scaleX(-1)" : "none", display: showVideo ? "block" : "none" }}
+                style={{ transform: (isLocal && !isBackCamera) ? "scaleX(-1)" : "none", display: showVideo ? "block" : "none" }}
             />
 
             {/* Connecting placeholder */}
@@ -271,6 +272,8 @@ export default function GroupCallRoom() {
     const [showMediaSettings, setShowMediaSettings] = useState(false);
     const [isSwitchingDevice, setIsSwitchingDevice] = useState(false);
     const [localStreamVersion, setLocalStreamVersion] = useState(0);
+
+    const [isBackCamera, setIsBackCamera] = useState(false);
 
     // ── Detect mobile ─────────────────────────────────────────────────────────
     useEffect(() => {
@@ -596,23 +599,8 @@ export default function GroupCallRoom() {
         if (isSwitchingDevice) return;
         setIsSwitchingDevice(true);
         try {
-            const device = videoDevices.find(d => d.deviceId === deviceId);
-            const label = (device?.label || "").toLowerCase();
-            const isBack = label.includes("back") || label.includes("rear") || label.includes("environment");
-            const isFront = label.includes("front") || label.includes("user") || label.includes("facetime");
+            const videoConstraint: MediaTrackConstraints = { deviceId: { exact: deviceId } };
 
-            let videoConstraint: MediaTrackConstraints;
-            if (isMobile && isBack) {
-                videoConstraint = { facingMode: "environment" };
-            } else if (isMobile && isFront) {
-                videoConstraint = { facingMode: "user" };
-            } else if (isMobile) {
-                const currentFacing = localStreamRef.current
-                    ?.getVideoTracks()[0]?.getSettings().facingMode;
-                videoConstraint = { facingMode: currentFacing === "environment" ? "user" : "environment" };
-            } else {
-                videoConstraint = { deviceId: { exact: deviceId } };
-            }
 
             // Get new video stream
             const newVideoStream = await navigator.mediaDevices.getUserMedia({
@@ -621,18 +609,25 @@ export default function GroupCallRoom() {
             });
             const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-            // Wait for the track to be truly live before doing anything
-            // This prevents the black screen on Android when switching to back camera
+            // Wait for the new track to actually produce frames before replacing
             await new Promise<void>((resolve) => {
-                if (newVideoTrack.readyState === "live") {
+                let settled = false;
+                const done = () => {
+                    if (settled) return;
+                    settled = true;
+                    tmpVideo.srcObject = null;
                     resolve();
-                    return;
-                }
-                const onLive = () => { newVideoTrack.removeEventListener("unmute", onLive); resolve(); };
-                newVideoTrack.addEventListener("unmute", onLive);
-                // Safety timeout — resolve after 800ms regardless
-                setTimeout(resolve, 800);
+                };
+                const tmpVideo = document.createElement("video");
+                tmpVideo.muted = true;
+                tmpVideo.playsInline = true;
+                tmpVideo.autoplay = true;
+                tmpVideo.srcObject = new MediaStream([newVideoTrack]);
+                tmpVideo.addEventListener("canplay", done);
+                tmpVideo.play().catch(done);
+                setTimeout(done, 2000); // 2s hard timeout
             });
+
 
             // Replace track in ALL peer connections (no renegotiation)
             await Promise.all(
@@ -662,7 +657,12 @@ export default function GroupCallRoom() {
                 await localVideoRef.current.play().catch(() => { });
             }
 
-            setCurrentVideoId(deviceId);
+            const actualDeviceId = newVideoTrack.getSettings().deviceId || deviceId;
+            setCurrentVideoId(actualDeviceId);
+
+            const facing = newVideoTrack.getSettings().facingMode;
+            setIsBackCamera(facing === "environment");
+
             setLocalStreamVersion(v => v + 1);
             if (isCameraOff) setIsCameraOff(false);
 
@@ -967,6 +967,7 @@ export default function GroupCallRoom() {
                                 handRaised={myHandRaised}
                                 reactions={floatingReactions.filter(r => r.tileIndex === 0)}
                                 streamVersion={localStreamVersion}
+                                isBackCamera={isBackCamera}
                             />
                         </div>
 
