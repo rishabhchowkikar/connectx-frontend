@@ -20,7 +20,6 @@ export const useSocket = () => {
 
         newSocket.on("connect", () => {
             console.log(`Socket Connected: ${newSocket.id}`);
-            setSocket(newSocket);  // ← Triggers re-render with real socket
         });
 
         newSocket.on("disconnect", (reason) => {
