@@ -35,18 +35,7 @@ const data = {
                     disabled: false,
                 },
             ],
-        },
-        {
-            title: "Calling",
-            url: "#",
-            items: [
-                {
-                    title: "Voice Call (Coming Soon)",
-                    url: "#",
-                    disabled: true,
-                },
-            ],
-        },
+        }
     ],
 };
 

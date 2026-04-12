@@ -78,6 +78,7 @@ function getOrphanStyle(idx: number, total: number, cols: number): React.CSSProp
 function VideoTile({
     name, color, isLocal, isAdmin, isMuted, isCamOff,
     isActive, compact, stream, videoRef, handRaised, reactions,
+    streamVersion
 }: {
     name: string;
     color: string;
@@ -91,15 +92,17 @@ function VideoTile({
     videoRef?: React.RefObject<HTMLVideoElement>;
     handRaised?: boolean;
     reactions?: FloatingReaction[];
+    streamVersion?: number;
 }) {
     const internalRef = useRef<HTMLVideoElement>(null);
     const ref = (videoRef ?? internalRef) as React.RefObject<HTMLVideoElement>;
 
     useEffect(() => {
-        if (ref.current && stream && ref.current.srcObject !== stream) {
+        if (ref.current && stream) {
             ref.current.srcObject = stream;
+            ref.current.play().catch(() => { });
         }
-    }, [stream]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [stream, streamVersion]);
 
     const bars = [0.35, 0.65, 1, 0.7, 0.45];
     const showVideo = !isCamOff && (!!stream || isLocal);
@@ -267,6 +270,7 @@ export default function GroupCallRoom() {
     const [currentAudioOutputId, setCurrentAudioOutputId] = useState<string>("");
     const [showMediaSettings, setShowMediaSettings] = useState(false);
     const [isSwitchingDevice, setIsSwitchingDevice] = useState(false);
+    const [localStreamVersion, setLocalStreamVersion] = useState(0);
 
     // ── Detect mobile ─────────────────────────────────────────────────────────
     useEffect(() => {
@@ -589,62 +593,66 @@ export default function GroupCallRoom() {
     // ── Switch video device ───────────────────────────────────────────────────────
 
     const switchVideoDevice = async (deviceId: string) => {
-        if (isSwitchingDevice || currentVideoId === deviceId) return;
+        if (isSwitchingDevice) return;
         setIsSwitchingDevice(true);
         try {
-            // Find the device to determine facingMode for mobile
+            // Determine constraint — facingMode for mobile, exact deviceId for desktop
             const device = videoDevices.find(d => d.deviceId === deviceId);
-            const label = device?.label?.toLowerCase() || "";
-
-            // Mobile browsers work better with facingMode than exact deviceId
-            // Detect front/back from label since mobile deviceIds are often unreliable
-            const isFront = label.includes("front") || label.includes("user") || label.includes("facetime");
+            const label = (device?.label || "").toLowerCase();
             const isBack = label.includes("back") || label.includes("rear") || label.includes("environment");
+            const isFront = label.includes("front") || label.includes("user") || label.includes("facetime");
 
             let videoConstraint: MediaTrackConstraints;
-
-            if (isMobile && (isFront || isBack)) {
-                // Use facingMode on mobile — much more reliable
-                videoConstraint = { facingMode: isBack ? "environment" : "user" };
-            } else if (deviceId && deviceId !== "default" && deviceId !== "") {
-                // Desktop or known deviceId — use exact
-                videoConstraint = { deviceId: { exact: deviceId } };
+            if (isMobile && isBack) {
+                videoConstraint = { facingMode: "environment" };
+            } else if (isMobile && isFront) {
+                videoConstraint = { facingMode: "user" };
+            } else if (isMobile) {
+                // Mobile but label unrecognized — toggle from current
+                const currentFacing = localStreamRef.current
+                    ?.getVideoTracks()[0]?.getSettings().facingMode;
+                videoConstraint = { facingMode: currentFacing === "environment" ? "user" : "environment" };
             } else {
-                // Fallback — try ideal instead of exact (won't throw if not found)
-                videoConstraint = { deviceId: { ideal: deviceId } };
+                videoConstraint = { deviceId: { exact: deviceId } };
             }
 
-            const newStream = await navigator.mediaDevices.getUserMedia({
+            // Get new video track
+            const newVideoStream = await navigator.mediaDevices.getUserMedia({
                 video: videoConstraint,
                 audio: false,
             });
+            const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-            const newTrack = newStream.getVideoTracks()[0];
-
-            // Replace in all peer connections — no renegotiation needed
+            // Step 1: Replace track in ALL peer connections first (no renegotiation)
             await Promise.all(
                 Array.from(peerConnectionsRef.current.values()).map(pc => {
                     const sender = pc.getSenders().find(s => s.track?.kind === "video");
-                    return sender ? sender.replaceTrack(newTrack) : Promise.resolve();
+                    return sender ? sender.replaceTrack(newVideoTrack) : Promise.resolve();
                 })
             );
 
-            // Stop old video track
+            // Step 2: Stop old video track
             localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
-            localStreamRef.current?.getVideoTracks().forEach(t => localStreamRef.current!.removeTrack(t));
-            localStreamRef.current?.addTrack(newTrack);
 
-            // Force re-attach to video element
+            // Step 3: Build a BRAND NEW MediaStream — do NOT mutate the old one
+            // This is the key fix: new stream reference forces React to re-render VideoTile
+            const audioTracks = localStreamRef.current?.getAudioTracks() || [];
+            const newStream = new MediaStream([...audioTracks, newVideoTrack]);
+            localStreamRef.current = newStream;
+
+            // Step 4: Re-attach to local video element
             if (localVideoRef.current) {
-                localVideoRef.current.srcObject = null;
-                localVideoRef.current.srcObject = localStreamRef.current;
+                localVideoRef.current.srcObject = newStream;
                 localVideoRef.current.play().catch(() => { });
             }
 
+            // Step 5: Bump version so VideoTile re-reads the ref
+            setLocalStreamVersion(v => v + 1);
             setCurrentVideoId(deviceId);
             if (isCameraOff) setIsCameraOff(false);
-        } catch (err) {
-            console.error("Video switch failed:", err);
+
+        } catch (err: any) {
+            console.error("Camera switch failed:", err?.name, err?.message);
         } finally {
             setIsSwitchingDevice(false);
         }
@@ -943,6 +951,7 @@ export default function GroupCallRoom() {
                                 videoRef={localVideoRef as React.RefObject<HTMLVideoElement>}
                                 handRaised={myHandRaised}
                                 reactions={floatingReactions.filter(r => r.tileIndex === 0)}
+                                streamVersion={localStreamVersion}
                             />
                         </div>
 
