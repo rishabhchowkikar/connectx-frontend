@@ -277,6 +277,8 @@ export default function GroupCallRoom() {
 
     const [isBackCamera, setIsBackCamera] = useState(false);
 
+    const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+
     // ── Detect mobile ─────────────────────────────────────────────────────────
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
@@ -621,14 +623,105 @@ export default function GroupCallRoom() {
         router.push("/dashboard/group-calling");
     };
 
+    const flipCamera = async () => {
+        if (isSwitchingDevice) return;
+        const nextFacing = facingMode === "user" ? "environment" : "user";
+        setIsSwitchingDevice(true);
+        try {
+            const newVideoStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { exact: nextFacing } },
+                audio: false,
+            });
+            const newVideoTrack = newVideoStream.getVideoTracks()[0];
+
+            // Wait for frames
+            await new Promise<void>((resolve) => {
+                let settled = false;
+                const done = () => { if (settled) return; settled = true; tmpVideo.srcObject = null; resolve(); };
+                const tmpVideo = document.createElement("video");
+                tmpVideo.muted = true; tmpVideo.playsInline = true; tmpVideo.autoplay = true;
+                tmpVideo.srcObject = new MediaStream([newVideoTrack]);
+                tmpVideo.addEventListener("canplay", done);
+                tmpVideo.play().catch(done);
+                setTimeout(done, 2000);
+            });
+
+            await Promise.all(
+                Array.from(peerConnectionsRef.current.values()).map(pc => {
+                    const sender = pc.getSenders().find(s => s.track?.kind === "video");
+                    return sender ? sender.replaceTrack(newVideoTrack) : Promise.resolve();
+                })
+            );
+
+            localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
+            const audioTracks = localStreamRef.current?.getAudioTracks() || [];
+            const newStream = new MediaStream([...audioTracks, newVideoTrack]);
+            localStreamRef.current = newStream;
+
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = null;
+                await new Promise(r => setTimeout(r, 50));
+                localVideoRef.current.srcObject = newStream;
+                await localVideoRef.current.play().catch(() => { });
+            }
+
+            setFacingMode(nextFacing);
+            setIsBackCamera(nextFacing === "environment");
+            setCurrentVideoId(newVideoTrack.getSettings().deviceId || "");
+            setLocalStreamVersion(v => v + 1);
+            if (isCameraOff) setIsCameraOff(false);
+        } catch (err: any) {
+            console.error("Flip camera failed:", err?.name, err?.message);
+        } finally {
+            setIsSwitchingDevice(false);
+        }
+    };
+
     // ── Switch video device ───────────────────────────────────────────────────────
 
     const switchVideoDevice = async (deviceId: string) => {
         if (isSwitchingDevice) return;
         setIsSwitchingDevice(true);
         try {
-            const videoConstraint: MediaTrackConstraints = { deviceId: { exact: deviceId } };
+            // On mobile, deviceId-based switching is unreliable.
+            // Detect if this is front or back camera from the device label,
+            // then use facingMode which is universally supported on mobile.
+            const device = videoDevices.find(d => d.deviceId === deviceId);
+            const label = (device?.label || "").toLowerCase();
 
+            let videoConstraint: MediaTrackConstraints;
+
+            if (isMobile) {
+                const isBack = label.includes("back") || label.includes("rear") || label.includes("environment");
+                const isFront = label.includes("front") || label.includes("user") || label.includes("facetime");
+            
+                // Fallback: use device index if label gives no signal
+                const deviceIndex = videoDevices.findIndex(d => d.deviceId === deviceId);
+            
+                let targetFacing: "user" | "environment";
+            
+                if (isBack) {
+                    targetFacing = "environment";
+                } else if (isFront) {
+                    targetFacing = "user";
+                } else {
+                    // No label info — use index: 0 = front, 1+ = back (standard Android ordering)
+                    targetFacing = deviceIndex === 0 ? "user" : "environment";
+                }
+            
+                // Only switch if different from current camera
+                const currentFacing = localStreamRef.current
+                    ?.getVideoTracks()[0]?.getSettings().facingMode;
+                if (targetFacing === currentFacing) {
+                    setIsSwitchingDevice(false);
+                    return;
+                }
+            
+                videoConstraint = { facingMode: { exact: targetFacing } };
+            } else {
+                // Desktop — deviceId works reliably
+                videoConstraint = { deviceId: { exact: deviceId } };
+            }
 
             // Get new video stream
             const newVideoStream = await navigator.mediaDevices.getUserMedia({
@@ -689,7 +782,9 @@ export default function GroupCallRoom() {
             setCurrentVideoId(actualDeviceId);
 
             const facing = newVideoTrack.getSettings().facingMode;
-            setIsBackCamera(facing === "environment");
+            const isEnv = facing === "environment";
+            setIsBackCamera(isEnv);
+            setFacingMode(isEnv ? "environment" : "user"); 
 
             setLocalStreamVersion(v => v + 1);
             if (isCameraOff) setIsCameraOff(false);
@@ -1326,6 +1421,18 @@ export default function GroupCallRoom() {
                         <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
                     </svg>
                 </button>
+
+                {/* Flip camera — mobile only */}
+                {isMobile && (
+                    <button
+                        onClick={flipCamera}
+                        disabled={isSwitchingDevice}
+                        className={`w-11 h-11 rounded-full flex items-center justify-center text-white cursor-pointer transition-all text-lg border-none ${isSwitchingDevice ? "bg-white/[0.04] opacity-50" : "bg-white/[0.07] border border-white/[0.12]"}`}
+                        title="Flip camera"
+                    >
+                        🔄
+                    </button>
+                )}
 
                 {/* Raise hand */}
                 <button onClick={toggleHand}
