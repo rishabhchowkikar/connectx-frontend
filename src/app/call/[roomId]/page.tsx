@@ -240,11 +240,12 @@ export default function CallRoom() {
     // mobile in-app browsers. The stream exists but the <video> element lost
     // its srcObject during the React re-render that switches screens.
     useEffect(() => {
+        if (!mediaStreamReady) return;
         if (localVideoRef.current && localStreamRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
-            localVideoRef.current.play().catch(() => { });
+            localVideoRef.current.play().catch(() => {});
         }
-    }, [hasJoined]);
+    }, [mediaStreamReady, hasJoined]);
 
     // ── useEffect: scroll chat to bottom ──────────────────────────────────────
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessage]);
@@ -324,13 +325,15 @@ export default function CallRoom() {
 
             pc.ontrack = (e) => {
                 console.log("🎥 Got remote track:", e.track.kind);
+                const stream = e.streams[0];
                 if (remoteVideoRef.current) {
-                    remoteVideoRef.current.srcObject = e.streams[0];
+                    remoteVideoRef.current.srcObject = stream;
+                    remoteVideoRef.current.play().catch(() => {});
                     setCallStatus("Connected");
                     setRemoteConnected(true);
-                    setShowInvitePopup(false)
+                    setShowInvitePopup(false);
                 }
-            }
+            };
             localStreamRef.current?.getTracks().forEach(t =>
                 pc.addTrack(t, localStreamRef.current!)
             );
@@ -762,7 +765,7 @@ export default function CallRoom() {
                 ref={remoteVideoRef}
                 autoPlay
                 playsInline
-                className={`absolute inset-0 w-full h-full object-contain ${remoteConnected ? "block" : "hidden"}`}
+                className={`absolute inset-0 w-full h-full object-cover ${remoteConnected ? "block" : "hidden"}`}
             />
 
             {/* Waiting state — centered over the black bg */}
