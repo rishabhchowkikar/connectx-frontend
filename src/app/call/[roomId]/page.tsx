@@ -243,7 +243,7 @@ export default function CallRoom() {
         if (!mediaStreamReady) return;
         if (localVideoRef.current && localStreamRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
-            localVideoRef.current.play().catch(() => {});
+            localVideoRef.current.play().catch(() => { });
         }
     }, [mediaStreamReady, hasJoined]);
 
@@ -319,7 +319,16 @@ export default function CallRoom() {
                     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
                     pc.close();
                     peerConnectionRef.current = null;
-                    setCallStatus("Connection failed — waiting for peer...");
+                    setCallStatus("Reconnecting...");
+
+                    // Auto-rebuild after 2s if socket is still connected
+                    setTimeout(() => {
+                        if (socket?.connected) {
+                            console.log("🔄 Auto-rebuilding PC after failure");
+                            peerConnectionRef.current = buildPeerConnection();
+                            socket.emit("join-room", { roomId, userName });
+                        }
+                    }, 2000);
                 }
             };
 
@@ -328,7 +337,7 @@ export default function CallRoom() {
                 const stream = e.streams[0];
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.srcObject = stream;
-                    remoteVideoRef.current.play().catch(() => {});
+                    remoteVideoRef.current.play().catch(() => { });
                     setCallStatus("Connected");
                     setRemoteConnected(true);
                     setShowInvitePopup(false);
@@ -462,11 +471,23 @@ export default function CallRoom() {
             setTimeout(() => setReactions(prev => prev.filter(r => r.id !== id)), 3000);
         });
 
+        // When socket reconnects mid-call, rejoin room and rebuild PC
+        socket.on("connect", () => {
+            console.log("🔄 Socket reconnected — rejoining room");
+            if (!peerConnectionRef.current ||
+                peerConnectionRef.current.connectionState === "failed" ||
+                peerConnectionRef.current.connectionState === "closed") {
+                peerConnectionRef.current = buildPeerConnection();
+            }
+            socket.emit("join-room", { roomId, userName });
+        });
+
         socket.emit("join-room", { roomId, userName });
 
         return () => {
             peerConnectionRef.current?.close();
             peerConnectionRef.current = null;
+            socket.off("connect");
             socket.off("ready", handleReady);
             socket.off("offer", handleOffer);
             socket.off("answer", handleAnswer);
@@ -877,8 +898,8 @@ export default function CallRoom() {
                 <div
                     key={r.id}
                     className={`absolute z-50 text-4xl pointer-events-none select-none ${r.fromSelf
-                            ? "reaction-float-self right-32 sm:right-64 bottom-24"
-                            : "reaction-float-peer left-6 bottom-24"
+                        ? "reaction-float-self right-32 sm:right-64 bottom-24"
+                        : "reaction-float-peer left-6 bottom-24"
                         }`}
                 >
                     {r.emoji}
