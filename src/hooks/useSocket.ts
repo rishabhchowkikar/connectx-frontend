@@ -18,6 +18,13 @@ export const useSocket = () => {
         socketRef.current = newSocket;
         setSocket(newSocket)
 
+        // Client heartbeat — keeps connection alive when tab is backgrounded
+        const heartbeat = setInterval(() => {
+            if (newSocket.connected) {
+                newSocket.emit("ping");
+            }
+        }, 25000);
+
         newSocket.on("connect", () => {
             console.log(`Socket Connected: ${newSocket.id}`);
         });
@@ -29,6 +36,7 @@ export const useSocket = () => {
         });
 
         return () => {
+            clearInterval(heartbeat);
             newSocket.disconnect();
             socketRef.current = null;
         };
