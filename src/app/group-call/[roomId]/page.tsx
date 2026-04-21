@@ -496,10 +496,19 @@ export default function GroupCallRoom() {
         });
 
         socket.on("group-peer-left", ({ socketId }: { socketId: string }) => {
+            // Close and clean up peer connection first
             const pc = peerConnectionsRef.current.get(socketId);
-            if (pc) { pc.close(); peerConnectionsRef.current.delete(socketId); }
+            if (pc) {
+                pc.ontrack = null;
+                pc.onicecandidate = null;
+                pc.oniceconnectionstatechange = null;
+                pc.close();
+                peerConnectionsRef.current.delete(socketId);
+            }
+            // Remove participant — React will unmount the VideoTile cleanly
             setParticipants(prev => prev.filter(p => p.socketId !== socketId));
             setRaisedHands(prev => prev.filter(h => h.socketId !== socketId));
+            setFloatingReactions(prev => prev.filter(r => r.tileIndex !== 0)); // cleanup any stuck reactions
         });
 
         socket.on("group-you-are-admin", () => {
@@ -636,15 +645,12 @@ export default function GroupCallRoom() {
 
             // Wait for frames
             await new Promise<void>((resolve) => {
-                let settled = false;
-                const done = () => { if (settled) return; settled = true; tmpVideo.srcObject = null; resolve(); };
-                const tmpVideo = document.createElement("video");
-                tmpVideo.muted = true; tmpVideo.playsInline = true; tmpVideo.autoplay = true;
-                tmpVideo.srcObject = new MediaStream([newVideoTrack]);
-                tmpVideo.addEventListener("canplay", done);
-                tmpVideo.play().catch(done);
-                setTimeout(done, 2000);
+                if (newVideoTrack.readyState === "live") { resolve(); return; }
+                const onLive = () => { newVideoTrack.removeEventListener("unmute", onLive); resolve(); };
+                newVideoTrack.addEventListener("unmute", onLive);
+                setTimeout(resolve, 800);
             });
+
 
             await Promise.all(
                 Array.from(peerConnectionsRef.current.values()).map(pc => {
@@ -694,12 +700,12 @@ export default function GroupCallRoom() {
             if (isMobile) {
                 const isBack = label.includes("back") || label.includes("rear") || label.includes("environment");
                 const isFront = label.includes("front") || label.includes("user") || label.includes("facetime");
-            
+
                 // Fallback: use device index if label gives no signal
                 const deviceIndex = videoDevices.findIndex(d => d.deviceId === deviceId);
-            
+
                 let targetFacing: "user" | "environment";
-            
+
                 if (isBack) {
                     targetFacing = "environment";
                 } else if (isFront) {
@@ -708,7 +714,7 @@ export default function GroupCallRoom() {
                     // No label info — use index: 0 = front, 1+ = back (standard Android ordering)
                     targetFacing = deviceIndex === 0 ? "user" : "environment";
                 }
-            
+
                 // Only switch if different from current camera
                 const currentFacing = localStreamRef.current
                     ?.getVideoTracks()[0]?.getSettings().facingMode;
@@ -716,7 +722,7 @@ export default function GroupCallRoom() {
                     setIsSwitchingDevice(false);
                     return;
                 }
-            
+
                 videoConstraint = { facingMode: { exact: targetFacing } };
             } else {
                 // Desktop — deviceId works reliably
@@ -730,23 +736,12 @@ export default function GroupCallRoom() {
             });
             const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-            // Wait for the new track to actually produce frames before replacing
+            // Wait for track to be truly live — prevents black screen on Android back camera
             await new Promise<void>((resolve) => {
-                let settled = false;
-                const done = () => {
-                    if (settled) return;
-                    settled = true;
-                    tmpVideo.srcObject = null;
-                    resolve();
-                };
-                const tmpVideo = document.createElement("video");
-                tmpVideo.muted = true;
-                tmpVideo.playsInline = true;
-                tmpVideo.autoplay = true;
-                tmpVideo.srcObject = new MediaStream([newVideoTrack]);
-                tmpVideo.addEventListener("canplay", done);
-                tmpVideo.play().catch(done);
-                setTimeout(done, 2000); // 2s hard timeout
+                if (newVideoTrack.readyState === "live") { resolve(); return; }
+                const onLive = () => { newVideoTrack.removeEventListener("unmute", onLive); resolve(); };
+                newVideoTrack.addEventListener("unmute", onLive);
+                setTimeout(resolve, 800);
             });
 
 
@@ -784,7 +779,7 @@ export default function GroupCallRoom() {
             const facing = newVideoTrack.getSettings().facingMode;
             const isEnv = facing === "environment";
             setIsBackCamera(isEnv);
-            setFacingMode(isEnv ? "environment" : "user"); 
+            setFacingMode(isEnv ? "environment" : "user");
 
             setLocalStreamVersion(v => v + 1);
             if (isCameraOff) setIsCameraOff(false);
@@ -1423,7 +1418,7 @@ export default function GroupCallRoom() {
                 </button>
 
                 {/* Flip camera — mobile only */}
-                {isMobile && (
+              {/***   {isMobile && (
                     <button
                         onClick={flipCamera}
                         disabled={isSwitchingDevice}
@@ -1432,7 +1427,7 @@ export default function GroupCallRoom() {
                     >
                         🔄
                     </button>
-                )}
+                )}} */}
 
                 {/* Raise hand */}
                 <button onClick={toggleHand}
