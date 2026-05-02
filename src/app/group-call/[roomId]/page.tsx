@@ -306,15 +306,18 @@ export default function GroupCallRoom() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "user" },
-                    audio: true,
+                    audio: {
+                        noiseSuppression: true,
+                        echoCancellation: true,
+                        autoGainControl: true,
+                    },
                 });
                 localStreamRef.current = stream;
                 if (localVideoRef.current) {
                     localVideoRef.current.srcObject = stream;
-                    localVideoRef.current.play().catch(() => { }); // force play on mobile
+                    await localVideoRef.current.play().catch(() => { });
                 }
                 setMediaStreamReady(true);
-                // Enumerate all devices
 
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
@@ -322,8 +325,25 @@ export default function GroupCallRoom() {
                 setAudioOutputDevices(devices.filter(d => d.kind === "audiooutput"));
                 setCurrentVideoId(stream.getVideoTracks()[0]?.getSettings().deviceId || "");
                 setCurrentAudioInputId(stream.getAudioTracks()[0]?.getSettings().deviceId || "");
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Camera/mic error:", err);
+                // NotAllowedError = user denied OR browser policy blocked
+                if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+                    // Don't set error state — let them click Join Now to retry
+                    console.warn("Camera blocked — will retry on Join click");
+                    return;
+                }
+                // For other errors, try audio-only fallback
+                if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+                    try {
+                        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        localStreamRef.current = audioStream;
+                        setIsCameraOff(true);
+                        setMediaStreamReady(true);
+                        const mics = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput");
+                        setAudioInputDevices(mics);
+                    } catch (_) { }
+                }
             }
         };
         init();
@@ -497,9 +517,16 @@ export default function GroupCallRoom() {
 
         socket.on("group-peer-left", ({ socketId }: { socketId: string }) => {
             const pc = peerConnectionsRef.current.get(socketId);
-            if (pc) { pc.close(); peerConnectionsRef.current.delete(socketId); }
+            if (pc) {
+                pc.ontrack = null;
+                pc.onicecandidate = null;
+                pc.oniceconnectionstatechange = null;
+                pc.close();
+                peerConnectionsRef.current.delete(socketId);
+            }
             setParticipants(prev => prev.filter(p => p.socketId !== socketId));
             setRaisedHands(prev => prev.filter(h => h.socketId !== socketId));
+            setFloatingReactions(prev => prev.filter(r => r.tileIndex !== 0));
         });
 
         socket.on("group-you-are-admin", () => {
@@ -634,16 +661,12 @@ export default function GroupCallRoom() {
             });
             const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-            // Wait for frames
+            // Wait for track to be truly live — prevents black screen on Android back camera
             await new Promise<void>((resolve) => {
-                let settled = false;
-                const done = () => { if (settled) return; settled = true; tmpVideo.srcObject = null; resolve(); };
-                const tmpVideo = document.createElement("video");
-                tmpVideo.muted = true; tmpVideo.playsInline = true; tmpVideo.autoplay = true;
-                tmpVideo.srcObject = new MediaStream([newVideoTrack]);
-                tmpVideo.addEventListener("canplay", done);
-                tmpVideo.play().catch(done);
-                setTimeout(done, 2000);
+                if (newVideoTrack.readyState === "live") { resolve(); return; }
+                const onLive = () => { newVideoTrack.removeEventListener("unmute", onLive); resolve(); };
+                newVideoTrack.addEventListener("unmute", onLive);
+                setTimeout(resolve, 800);
             });
 
             await Promise.all(
@@ -694,12 +717,12 @@ export default function GroupCallRoom() {
             if (isMobile) {
                 const isBack = label.includes("back") || label.includes("rear") || label.includes("environment");
                 const isFront = label.includes("front") || label.includes("user") || label.includes("facetime");
-            
+
                 // Fallback: use device index if label gives no signal
                 const deviceIndex = videoDevices.findIndex(d => d.deviceId === deviceId);
-            
+
                 let targetFacing: "user" | "environment";
-            
+
                 if (isBack) {
                     targetFacing = "environment";
                 } else if (isFront) {
@@ -708,7 +731,7 @@ export default function GroupCallRoom() {
                     // No label info — use index: 0 = front, 1+ = back (standard Android ordering)
                     targetFacing = deviceIndex === 0 ? "user" : "environment";
                 }
-            
+
                 // Only switch if different from current camera
                 const currentFacing = localStreamRef.current
                     ?.getVideoTracks()[0]?.getSettings().facingMode;
@@ -716,7 +739,7 @@ export default function GroupCallRoom() {
                     setIsSwitchingDevice(false);
                     return;
                 }
-            
+
                 videoConstraint = { facingMode: { exact: targetFacing } };
             } else {
                 // Desktop — deviceId works reliably
@@ -730,25 +753,13 @@ export default function GroupCallRoom() {
             });
             const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-            // Wait for the new track to actually produce frames before replacing
+            // Wait for track to be truly live — prevents black screen on Android back camera
             await new Promise<void>((resolve) => {
-                let settled = false;
-                const done = () => {
-                    if (settled) return;
-                    settled = true;
-                    tmpVideo.srcObject = null;
-                    resolve();
-                };
-                const tmpVideo = document.createElement("video");
-                tmpVideo.muted = true;
-                tmpVideo.playsInline = true;
-                tmpVideo.autoplay = true;
-                tmpVideo.srcObject = new MediaStream([newVideoTrack]);
-                tmpVideo.addEventListener("canplay", done);
-                tmpVideo.play().catch(done);
-                setTimeout(done, 2000); // 2s hard timeout
+                if (newVideoTrack.readyState === "live") { resolve(); return; }
+                const onLive = () => { newVideoTrack.removeEventListener("unmute", onLive); resolve(); };
+                newVideoTrack.addEventListener("unmute", onLive);
+                setTimeout(resolve, 800);
             });
-
 
             // Replace track in ALL peer connections (no renegotiation)
             await Promise.all(
@@ -784,7 +795,7 @@ export default function GroupCallRoom() {
             const facing = newVideoTrack.getSettings().facingMode;
             const isEnv = facing === "environment";
             setIsBackCamera(isEnv);
-            setFacingMode(isEnv ? "environment" : "user"); 
+            setFacingMode(isEnv ? "environment" : "user");
 
             setLocalStreamVersion(v => v + 1);
             if (isCameraOff) setIsCameraOff(false);
@@ -947,14 +958,42 @@ export default function GroupCallRoom() {
                             <p className="text-gray-500 text-[11px] font-semibold uppercase tracking-wider mb-1">Room ID</p>
                             <p className="font-mono text-[11px] text-gray-400 break-all">{roomId}</p>
                         </div>
-                        {mediaStreamReady ? (
-                            <button onClick={() => { setRoomState("in-call"); setHasJoined(true); }}
-                                className="py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-base rounded-full cursor-pointer transition-colors shadow-[0_8px_24px_rgba(79,70,229,0.35)]">
-                                Join Now
-                            </button>
-                        ) : (
-                            <div className="py-3.5 bg-gray-800 text-gray-500 rounded-full text-center font-semibold text-[15px]">Starting camera…</div>
-                        )}
+                        <button
+                            onClick={async () => {
+                                // Retry camera init on click if it failed on mount (in-app browser block)
+                                if (!mediaStreamReady) {
+                                    try {
+                                        const stream = await navigator.mediaDevices.getUserMedia({
+                                            video: { facingMode: "user" },
+                                            audio: {
+                                                noiseSuppression: true,
+                                                echoCancellation: true,
+                                                autoGainControl: true,
+                                            },
+                                        });
+                                        localStreamRef.current = stream;
+                                        if (localVideoRef.current) {
+                                            localVideoRef.current.srcObject = stream;
+                                            await localVideoRef.current.play().catch(() => { });
+                                        }
+                                        setMediaStreamReady(true);
+                                        const devices = await navigator.mediaDevices.enumerateDevices();
+                                        setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
+                                        setAudioInputDevices(devices.filter(d => d.kind === "audioinput"));
+                                        setCurrentVideoId(stream.getVideoTracks()[0]?.getSettings().deviceId || "");
+                                        setCurrentAudioInputId(stream.getAudioTracks()[0]?.getSettings().deviceId || "");
+                                    } catch (err) {
+                                        console.error("Join click camera init failed:", err);
+                                        // Continue anyway — they can join audio-only
+                                    }
+                                }
+                                setRoomState("in-call");
+                                setHasJoined(true);
+                            }}
+                            className="py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-base rounded-full cursor-pointer transition-colors shadow-[0_8px_24px_rgba(79,70,229,0.35)]"
+                        >
+                            Join Now
+                        </button>
                         <button onClick={() => router.push("/dashboard/group-calling")}
                             className="py-3 bg-transparent text-gray-400 hover:bg-white/5 border border-white/[0.12] rounded-full font-semibold text-[15px] cursor-pointer transition-colors">
                             Cancel
