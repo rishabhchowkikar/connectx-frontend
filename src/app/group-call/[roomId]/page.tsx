@@ -480,12 +480,31 @@ export default function GroupCallRoom() {
         socket.on("group-new-peer", async ({
             socketId: newId, userName: newName,
         }: { socketId: string; userName: string }) => {
-            setParticipants(prev => [...prev, { socketId: newId, userName: newName }]);
+            // ← NEW: clean up any ghost participant with same name before adding
+            setParticipants(prev => {
+                const ghost = prev.find(p => p.userName === newName && p.socketId !== newId);
+                if (ghost) {
+                    const ghostPc = peerConnectionsRef.current.get(ghost.socketId);
+                    if (ghostPc) {
+                        ghostPc.ontrack = null;
+                        ghostPc.onicecandidate = null;
+                        ghostPc.oniceconnectionstatechange = null;
+                        ghostPc.close();
+                        peerConnectionsRef.current.delete(ghost.socketId);
+                    }
+                }
+                return [
+                    ...prev.filter(p => !(p.userName === newName && p.socketId !== newId)),
+                    { socketId: newId, userName: newName },
+                ];
+            });
+
             const pc = createPeerConnection(newId);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             socket.emit("group-offer", { offer, targetId: newId, roomId });
         });
+
 
         socket.on("group-offer", async ({
             offer, fromId,
@@ -646,6 +665,7 @@ export default function GroupCallRoom() {
     const handleEndCall = () => {
         localStreamRef.current?.getTracks().forEach(t => t.stop());
         peerConnectionsRef.current.forEach(pc => pc.close());
+        socket?.emit("leave-group-room", { roomId });
         socket?.disconnect();
         router.push("/dashboard/group-calling");
     };
@@ -654,14 +674,17 @@ export default function GroupCallRoom() {
         if (isSwitchingDevice) return;
         const nextFacing = facingMode === "user" ? "environment" : "user";
         setIsSwitchingDevice(true);
+        setIsCameraOff(true); // ← show avatar during flip
+
         try {
+            await new Promise(r => setTimeout(r, 300)); // ← let hardware settle before request
+
             const newVideoStream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: { exact: nextFacing } },
                 audio: false,
             });
             const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-            // Wait for track to be truly live — prevents black screen on Android back camera
             await new Promise<void>((resolve) => {
                 if (newVideoTrack.readyState === "live") { resolve(); return; }
                 const onLive = () => { newVideoTrack.removeEventListener("unmute", onLive); resolve(); };
@@ -676,15 +699,17 @@ export default function GroupCallRoom() {
                 })
             );
 
-            localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
-            const audioTracks = localStreamRef.current?.getAudioTracks() || [];
-            const newStream = new MediaStream([...audioTracks, newVideoTrack]);
-            localStreamRef.current = newStream;
+            // ← KEY FIX: mutate existing stream, same as switchVideoDevice
+            if (localStreamRef.current) {
+                localStreamRef.current.getVideoTracks().forEach(t => {
+                    t.stop();
+                    localStreamRef.current!.removeTrack(t);
+                });
+                localStreamRef.current.addTrack(newVideoTrack);
+            }
 
             if (localVideoRef.current) {
-                localVideoRef.current.srcObject = null;
-                await new Promise(r => setTimeout(r, 50));
-                localVideoRef.current.srcObject = newStream;
+                localVideoRef.current.srcObject = localStreamRef.current;
                 await localVideoRef.current.play().catch(() => { });
             }
 
@@ -692,9 +717,11 @@ export default function GroupCallRoom() {
             setIsBackCamera(nextFacing === "environment");
             setCurrentVideoId(newVideoTrack.getSettings().deviceId || "");
             setLocalStreamVersion(v => v + 1);
-            if (isCameraOff) setIsCameraOff(false);
+            setIsCameraOff(false); // ← show video
+
         } catch (err: any) {
             console.error("Flip camera failed:", err?.name, err?.message);
+            setIsCameraOff(false); // ← always restore
         } finally {
             setIsSwitchingDevice(false);
         }
@@ -705,55 +732,41 @@ export default function GroupCallRoom() {
     const switchVideoDevice = async (deviceId: string) => {
         if (isSwitchingDevice) return;
         setIsSwitchingDevice(true);
+        setIsCameraOff(true); // ← show avatar immediately, eliminates black screen
+
         try {
-            // On mobile, deviceId-based switching is unreliable.
-            // Detect if this is front or back camera from the device label,
-            // then use facingMode which is universally supported on mobile.
             const device = videoDevices.find(d => d.deviceId === deviceId);
             const label = (device?.label || "").toLowerCase();
-
             let videoConstraint: MediaTrackConstraints;
 
             if (isMobile) {
                 const isBack = label.includes("back") || label.includes("rear") || label.includes("environment");
                 const isFront = label.includes("front") || label.includes("user") || label.includes("facetime");
-
-                // Fallback: use device index if label gives no signal
                 const deviceIndex = videoDevices.findIndex(d => d.deviceId === deviceId);
-
                 let targetFacing: "user" | "environment";
+                if (isBack) targetFacing = "environment";
+                else if (isFront) targetFacing = "user";
+                else targetFacing = deviceIndex === 0 ? "user" : "environment";
 
-                if (isBack) {
-                    targetFacing = "environment";
-                } else if (isFront) {
-                    targetFacing = "user";
-                } else {
-                    // No label info — use index: 0 = front, 1+ = back (standard Android ordering)
-                    targetFacing = deviceIndex === 0 ? "user" : "environment";
-                }
-
-                // Only switch if different from current camera
-                const currentFacing = localStreamRef.current
-                    ?.getVideoTracks()[0]?.getSettings().facingMode;
+                const currentFacing = localStreamRef.current?.getVideoTracks()[0]?.getSettings().facingMode;
                 if (targetFacing === currentFacing) {
+                    setIsCameraOff(false);
                     setIsSwitchingDevice(false);
                     return;
                 }
-
                 videoConstraint = { facingMode: { exact: targetFacing } };
             } else {
-                // Desktop — deviceId works reliably
                 videoConstraint = { deviceId: { exact: deviceId } };
             }
 
-            // Get new video stream
+            await new Promise(r => setTimeout(r, 300)); // ← let Android hardware settle
+
             const newVideoStream = await navigator.mediaDevices.getUserMedia({
                 video: videoConstraint,
                 audio: false,
             });
             const newVideoTrack = newVideoStream.getVideoTracks()[0];
 
-            // Wait for track to be truly live — prevents black screen on Android back camera
             await new Promise<void>((resolve) => {
                 if (newVideoTrack.readyState === "live") { resolve(); return; }
                 const onLive = () => { newVideoTrack.removeEventListener("unmute", onLive); resolve(); };
@@ -761,7 +774,6 @@ export default function GroupCallRoom() {
                 setTimeout(resolve, 800);
             });
 
-            // Replace track in ALL peer connections (no renegotiation)
             await Promise.all(
                 Array.from(peerConnectionsRef.current.values()).map(pc => {
                     const sender = pc.getSenders().find(s => s.track?.kind === "video");
@@ -769,23 +781,18 @@ export default function GroupCallRoom() {
                 })
             );
 
-            // Stop old video track AFTER replacing in peer connections
-            const oldTracks = localStreamRef.current?.getVideoTracks() || [];
-            oldTracks.forEach(t => t.stop());
+            // ← KEY FIX: mutate existing stream instead of creating new MediaStream
+            // Creating a new stream + setting srcObject=null causes the black screen race on Android
+            if (localStreamRef.current) {
+                localStreamRef.current.getVideoTracks().forEach(t => {
+                    t.stop();
+                    localStreamRef.current!.removeTrack(t);
+                });
+                localStreamRef.current.addTrack(newVideoTrack);
+            }
 
-            // Build brand new MediaStream with existing audio + new video
-            const audioTracks = localStreamRef.current?.getAudioTracks() || [];
-            const newStream = new MediaStream([...audioTracks, newVideoTrack]);
-
-            // Replace the ref
-            localStreamRef.current = newStream;
-
-            // Detach first, then reattach — forces browser to fully re-initialize
             if (localVideoRef.current) {
-                localVideoRef.current.srcObject = null;
-                // Small yield — lets the browser process the null assignment
-                await new Promise(r => setTimeout(r, 50));
-                localVideoRef.current.srcObject = newStream;
+                localVideoRef.current.srcObject = localStreamRef.current;
                 await localVideoRef.current.play().catch(() => { });
             }
 
@@ -796,17 +803,16 @@ export default function GroupCallRoom() {
             const isEnv = facing === "environment";
             setIsBackCamera(isEnv);
             setFacingMode(isEnv ? "environment" : "user");
-
             setLocalStreamVersion(v => v + 1);
-            if (isCameraOff) setIsCameraOff(false);
+            setIsCameraOff(false); // ← show video once ready
 
         } catch (err: any) {
             console.error("Camera switch failed:", err?.name, err?.message);
+            setIsCameraOff(false); // ← always restore on error
         } finally {
             setIsSwitchingDevice(false);
         }
     };
-
 
     // ── Switch audio input (microphone) ─────────────────────────────────────────
 
