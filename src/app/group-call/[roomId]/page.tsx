@@ -78,7 +78,7 @@ function getOrphanStyle(idx: number, total: number, cols: number): React.CSSProp
 function VideoTile({
     name, color, isLocal, isAdmin, isMuted, isCamOff,
     isActive, compact, stream, videoRef, handRaised, reactions,
-    streamVersion, isBackCamera
+    streamVersion, isBackCamera, onKick
 }: {
     name: string;
     color: string;
@@ -94,6 +94,7 @@ function VideoTile({
     reactions?: FloatingReaction[];
     streamVersion?: number;
     isBackCamera?: boolean
+    onKick?: () => void;
 }) {
     const internalRef = useRef<HTMLVideoElement>(null);
     const ref = (videoRef ?? internalRef) as React.RefObject<HTMLVideoElement>;
@@ -111,7 +112,7 @@ function VideoTile({
 
     return (
         <div
-            className="relative overflow-hidden w-full h-full"
+            className="relative overflow-hidden w-full h-full group"
             style={{
                 borderRadius: compact ? 10 : 14,
                 background: "#16171a",
@@ -211,6 +212,16 @@ function VideoTile({
                     YOU
                 </div>
             )}
+
+            {onKick && (
+                <button
+                    onClick={onKick}
+                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-none cursor-pointer"
+                    title="Remove from call"
+                >
+                    <X className="w-3 h-3 text-white" />
+                </button>
+            )}
         </div>
     );
 }
@@ -233,6 +244,7 @@ export default function GroupCallRoom() {
     const participantsRef = useRef<Participant[]>([]);
     const hasEmittedJoinRef = useRef(false);
     const roomStateRef = useRef<"preview" | "waiting" | "in-call">("preview");
+    const callTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [isMuted, setIsMuted] = useState(false);
@@ -278,6 +290,12 @@ export default function GroupCallRoom() {
     const [isBackCamera, setIsBackCamera] = useState(false);
 
     const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+
+    // Toast message
+    const [toasts, setToasts] = useState<{ id: string; message: string; type: "join" | "leave" }[]>([]);
+
+    // call duration toast
+    const [callDuration, setCallDuration] = useState(0);
 
     // ── Detect mobile ─────────────────────────────────────────────────────────
     useEffect(() => {
@@ -480,6 +498,8 @@ export default function GroupCallRoom() {
         socket.on("group-new-peer", async ({
             socketId: newId, userName: newName,
         }: { socketId: string; userName: string }) => {
+            // setting the status of call to be connected
+            setCallStatus("Connected");
             // ← NEW: clean up any ghost participant with same name before adding
             setParticipants(prev => {
                 const ghost = prev.find(p => p.userName === newName && p.socketId !== newId);
@@ -498,6 +518,13 @@ export default function GroupCallRoom() {
                     { socketId: newId, userName: newName },
                 ];
             });
+            addToast(`${newName} Joined`, "join");
+
+            // Start timer on first peer joining
+            if (participantsRef.current.length === 0 && !callTimerRef.current) {
+                setCallDuration(0);
+                callTimerRef.current = setInterval(() => setCallDuration(s => s + 1), 1000);
+            }
 
             const pc = createPeerConnection(newId);
             const offer = await pc.createOffer();
@@ -535,6 +562,7 @@ export default function GroupCallRoom() {
         });
 
         socket.on("group-peer-left", ({ socketId }: { socketId: string }) => {
+            const leavingName = participantsRef.current.find(p => p.socketId === socketId)
             const pc = peerConnectionsRef.current.get(socketId);
             if (pc) {
                 pc.ontrack = null;
@@ -546,6 +574,8 @@ export default function GroupCallRoom() {
             setParticipants(prev => prev.filter(p => p.socketId !== socketId));
             setRaisedHands(prev => prev.filter(h => h.socketId !== socketId));
             setFloatingReactions(prev => prev.filter(r => r.tileIndex !== 0));
+
+            if (leavingName) addToast(`${leavingName.userName} Left the room`, "leave")
         });
 
         socket.on("group-you-are-admin", () => {
@@ -605,6 +635,11 @@ export default function GroupCallRoom() {
             }
         });
 
+        socket.on("group-kicked", () => {
+            alert("You were removed from the call by the host.");
+            handleEndCall();
+        });
+
         return () => {
             socket.off("group-joined");
             socket.off("waiting-for-admission");
@@ -623,6 +658,7 @@ export default function GroupCallRoom() {
             socket.off("group-reaction");
             socket.off("group-hand-raised");
             socket.off("group-mute-all");
+            socket.off("group-kicked");
             socket.off("connect");
             peerConnectionsRef.current.forEach(pc => pc.close());
             peerConnectionsRef.current.clear();
@@ -637,6 +673,12 @@ export default function GroupCallRoom() {
     const rejectUser = (socketId: string) => {
         socket?.emit("reject-user", { roomId, socketId });
         setWaitingUsers(prev => prev.filter(u => u.socketId !== socketId));
+    };
+
+    // kick participants - Admin
+    const kickParticipant = (socketId: string) => {
+        if (!isAdmin || !socket) return;
+        socket.emit("kick-participant", { roomId, socketId });
     };
 
     const muteAll = () => {
@@ -663,6 +705,7 @@ export default function GroupCallRoom() {
     };
 
     const handleEndCall = () => {
+        if (callTimerRef.current) { clearInterval(callTimerRef.current); callTimerRef.current = null; }
         localStreamRef.current?.getTracks().forEach(t => t.stop());
         peerConnectionsRef.current.forEach(pc => pc.close());
         socket?.emit("leave-group-room", { roomId });
@@ -864,7 +907,6 @@ export default function GroupCallRoom() {
             console.error("Speaker switch failed ", err);
         }
     }
-
     // ── Raise hand ────────────────────────────────────────────────────────────
     const toggleHand = () => {
         const newState = !myHandRaised;
@@ -878,6 +920,13 @@ export default function GroupCallRoom() {
         setFloatingReactions(prev => [...prev, { id, emoji, userName: fromName, tileIndex }]);
         setTimeout(() => setFloatingReactions(prev => prev.filter(r => r.id !== id)), 2500);
     };
+
+    // adding toast message utils
+    const addToast = (message: string, type: "join" | "leave") => {
+        const id = `${Date.now()}-${Math.random()}`;
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
+    }
 
     const sendReaction = (emoji: string) => {
         if (!socket) return;
@@ -912,6 +961,17 @@ export default function GroupCallRoom() {
 
     const formatGroupTime = (ts: number) =>
         new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+
+    // formatDuration for call duration helper function
+    const formatDuration = (s: number) => {
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+        return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    }
+
 
     // ── Auth loading ──────────────────────────────────────────────────────────
     if (loading) {
@@ -1081,7 +1141,9 @@ export default function GroupCallRoom() {
                 @keyframes slideUpMobile{from{transform:translateY(100%)}to{transform:translateY(0)}}
                 .chat-slide-up{animation:slideUpMobile 0.28s cubic-bezier(0.32,0.72,0,1)}
                 ::-webkit-scrollbar{width:3px}
-                ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+                ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px};
+                @keyframes fadeIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
+                .animate-fadeIn{animation:fadeIn 0.2s ease-out}
             `}</style>
 
             {/* ── Top bar ── */}
@@ -1092,6 +1154,11 @@ export default function GroupCallRoom() {
                     {isAdmin && (
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 flex items-center gap-1">
                             <Crown className="w-3 h-3" />Host
+                        </span>
+                    )}
+                    {callDuration > 0 && (
+                        <span className="text-gray-400 text-xs font-mono tabular-nums">
+                            {formatDuration(callDuration)}
                         </span>
                     )}
                 </div>
@@ -1111,6 +1178,8 @@ export default function GroupCallRoom() {
                     )}
                 </div>
             </div>
+
+
 
             {/* ── Main area ── */}
             <div className="flex-1 min-h-0 flex overflow-hidden">
@@ -1149,6 +1218,7 @@ export default function GroupCallRoom() {
                                     isActive={speakIdx === idx + 1} compact={compact} stream={p.stream}
                                     handRaised={p.handRaised}
                                     reactions={floatingReactions.filter(r => r.tileIndex === idx + 1)}
+                                    onKick={isAdmin ? () => kickParticipant(p.socketId) : undefined}
                                 />
                             </div>
                         ))}
@@ -1438,6 +1508,22 @@ export default function GroupCallRoom() {
                     </div>
                 </>
             )}
+
+            {/* ── Join/Leave Toasts ── */}
+
+            <div className="fixed top-16 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+                {toasts.map(t => (
+                    <div key={t.id} className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-white shadow-xl backdrop-blur-md border animate-fadeIn"
+                        style={{
+                            background: t.type === "join" ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)",
+                            borderColor: t.type === "join" ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)",
+                        }}
+                    >
+                        <span>{t.type === "join" ? "→" : "←"}</span>
+                        <span>{t.message}</span>
+                    </div>
+                ))}
+            </div>
 
             {/* ── Controls ── */}
             <div className="shrink-0 h-[68px] bg-[#18191c] border-t border-white/[0.06] flex items-center justify-center gap-2 sm:gap-3 px-3">
