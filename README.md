@@ -2,6 +2,9 @@
 
 A real-time video conferencing frontend built with **Next.js 16**, supporting 1-to-1 and group calls (up to 10 participants) with chat, screen sharing, emoji reactions, and admin controls.
 
+<img width="1920" height="928" alt="image" src="https://github.com/user-attachments/assets/2ad746fd-3a90-4a2b-a084-92d3dbe8c4ab" />
+
+
 > **Backend repo:** [connectx-backend](../connectx-backend) — Express + Socket.io signaling server
 
 ---
