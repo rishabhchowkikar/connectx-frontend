@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="720" viewBox="0 0 1100 720" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="btn" x1="0" x2="1">
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#6d28d9"/>
+    </linearGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+  <rect width="1100" height="720" rx="14" fill="#f8fafc"/>
+
+  <!-- hero -->
+  <rect x="0" y="0" width="1100" height="220" rx="14" fill="url(#hero)"/>
+  <rect x="0" y="200" width="1100" height="20" fill="url(#hero)"/>
+  <rect x="150" y="34" width="220" height="28" rx="14" fill="#ffffff" fill-opacity="0.15" stroke="#ffffff" stroke-opacity="0.25"/>
+  <text x="260" y="53" text-anchor="middle" font-size="12" font-weight="600" fill="#eef2ff">✦ Group Calling — ConnectX</text>
+  <text x="150" y="112" font-size="40" font-weight="800" fill="#fff">Meet Together, <tspan fill="#c7d2fe">Anywhere.</tspan></text>
+  <text x="150" y="148" font-size="16" fill="#e0e7ff">Start an instant group video call or join an existing room.</text>
+  <text x="150" y="172" font-size="16" fill="#e0e7ff">Host controls who joins — secure by default.</text>
+
+  <!-- main card -->
+  <g filter="url(#sh)">
+    <rect x="150" y="190" width="800" height="330" rx="16" fill="#fff" stroke="#f1f5f9"/>
+  </g>
+  <rect x="150" y="190" width="400" height="52" rx="16" fill="#eef2ff" fill-opacity="0.5"/>
+  <text x="350" y="222" text-anchor="middle" font-size="14" font-weight="600" fill="#4338ca">＋ Create Room</text>
+  <rect x="150" y="240" width="400" height="2" fill="#4f46e5"/>
+  <text x="750" y="222" text-anchor="middle" font-size="14" font-weight="600" fill="#64748b">🔗 Join Room</text>
+  <line x1="550" y1="241" x2="950" y2="241" stroke="#f1f5f9"/>
+
+  <!-- created state -->
+  <rect x="190" y="262" width="720" height="50" rx="10" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <circle cx="214" cy="287" r="11" fill="#10b981"/>
+  <path d="M209 287 l4 4 l7 -8" stroke="#fff" stroke-width="2" fill="none"/>
+  <text x="234" y="283" font-size="13" font-weight="600" fill="#065f46">Room Created!</text>
+  <text x="234" y="300" font-size="11" fill="#059669">Share the link below to invite participants.</text>
+  <text x="890" y="292" font-size="14" fill="#34d399">✕</text>
+
+  <text x="190" y="336" font-size="11" font-weight="600" fill="#64748b" letter-spacing="1">ROOM ID</text>
+  <rect x="190" y="344" width="720" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="204" y="367" font-size="12" fill="#334155" font-family="Consolas, monospace">group_8ed7c101-f192-41e4-95ff-2b1c7e0a9d11</text>
+
+  <text x="190" y="404" font-size="11" font-weight="600" fill="#64748b" letter-spacing="1">INVITE LINK</text>
+  <rect x="190" y="412" width="720" height="36" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="204" y="435" font-size="12" fill="#334155" font-family="Consolas, monospace">https://your-app/group-call/group_8ed7c101-f192-41e4-95ff-2b1c7e0a9d11</text>
+  <rect x="832" y="417" width="72" height="26" rx="6" fill="#4f46e5"/>
+  <text x="868" y="435" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">⧉ Copy</text>
+
+  <rect x="190" y="462" width="354" height="44" rx="12" fill="url(#btn)"/>
+  <text x="367" y="489" text-anchor="middle" font-size="14" font-weight="600" fill="#fff">▶ Start Call Now</text>
+  <rect x="556" y="462" width="354" height="44" rx="12" fill="#f1f5f9"/>
+  <text x="733" y="489" text-anchor="middle" font-size="14" font-weight="600" fill="#334155">Create Another</text>
+
+  <!-- features -->
+  <text x="150" y="560" font-size="11" font-weight="600" fill="#94a3b8" letter-spacing="1">WHY GROUP CALLING ON CONNECTX?</text>
+  <g>
+    <rect x="150" y="572" width="188" height="120" rx="12" fill="#f5f3ff" stroke="#ede9fe"/>
+    <rect x="168" y="590" width="30" height="30" rx="7" fill="#8b5cf6"/>
+    <text x="168" y="642" font-size="13" font-weight="600" fill="#7c3aed">Up to 10 Participants</text>
+    <text x="168" y="662" font-size="11" fill="#64748b">Host group sessions with</text>
+    <text x="168" y="677" font-size="11" fill="#64748b">crystal-clear quality.</text>
+
+    <rect x="354" y="572" width="188" height="120" rx="12" fill="#ecfdf5" stroke="#d1fae5"/>
+    <rect x="372" y="590" width="30" height="30" rx="7" fill="#10b981"/>
+    <text x="372" y="642" font-size="13" font-weight="600" fill="#059669">Admin Controlled</text>
+    <text x="372" y="662" font-size="11" fill="#64748b">Host approves who joins —</text>
+    <text x="372" y="677" font-size="11" fill="#64748b">full control over your room.</text>
+
+    <rect x="558" y="572" width="188" height="120" rx="12" fill="#fffbeb" stroke="#fef3c7"/>
+    <rect x="576" y="590" width="30" height="30" rx="7" fill="#f59e0b"/>
+    <text x="576" y="642" font-size="13" font-weight="600" fill="#d97706">Ultra Low Latency</text>
+    <text x="576" y="662" font-size="11" fill="#64748b">Real-time communication</text>
+    <text x="576" y="677" font-size="11" fill="#64748b">with sub-100ms delay.</text>
+
+    <rect x="762" y="572" width="188" height="120" rx="12" fill="#f0f9ff" stroke="#e0f2fe"/>
+    <rect x="780" y="590" width="30" height="30" rx="7" fill="#0ea5e9"/>
+    <text x="780" y="642" font-size="13" font-weight="600" fill="#0284c7">Works Everywhere</text>
+    <text x="780" y="662" font-size="11" fill="#64748b">No downloads needed — runs</text>
+    <text x="780" y="677" font-size="11" fill="#64748b">in any modern browser.</text>
+  </g>
+
+  <!-- annotations -->
+  <g font-size="12" fill="#4338ca">
+    <text x="966" y="350">id = "group_" +</text>
+    <text x="966" y="366">uuidv4()</text>
+    <text x="966" y="430">clipboard copy,</text>
+    <text x="966" y="446">"Copied!" 2.5 s</text>
+    <text x="966" y="482">→ /group-call/{id}</text>
+    <text x="966" y="256">Join tab: bare ID</text>
+    <text x="966" y="272">or full invite URL</text>
+  </g>
+</svg>

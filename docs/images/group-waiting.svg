@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+  <rect width="900" height="560" rx="14" fill="#101115"/>
+  <text x="24" y="32" font-size="13" fill="#818cf8" font-weight="600">/group-call/{roomId} — roomState = "waiting"</text>
+
+  <circle cx="450" cy="92" r="36" fill="#6366f1" fill-opacity="0.12" stroke="#6366f1" stroke-width="2"/>
+  <circle cx="440" cy="84" r="8" fill="none" stroke="#818cf8" stroke-width="2.5"/>
+  <path d="M424 108 q16 -18 32 0" fill="none" stroke="#818cf8" stroke-width="2.5"/>
+  <circle cx="462" cy="86" r="6" fill="none" stroke="#818cf8" stroke-width="2.5"/>
+  <path d="M458 104 q10 -12 20 0" fill="none" stroke="#818cf8" stroke-width="2.5"/>
+
+  <text x="450" y="162" text-anchor="middle" font-size="24" font-weight="800" fill="#fff">Waiting to be admitted</text>
+  <text x="450" y="190" text-anchor="middle" font-size="15" fill="#9ca3af">Rishabh will let you in soon.</text>
+  <text x="450" y="212" text-anchor="middle" font-size="13" fill="#4b5563">Please wait for the host to admit you.</text>
+
+  <rect x="240" y="236" width="420" height="236" rx="16" fill="#1e1f22" stroke="#fff" stroke-opacity="0.08"/>
+  <circle cx="450" cy="336" r="44" fill="#334155"/>
+  <path d="M370 472 C 380 400, 520 400, 530 472 Z" fill="#334155"/>
+
+  <g text-anchor="middle" font-size="15" fill="#fff">
+    <circle cx="394" cy="510" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="394" y="515">🎤</text>
+    <circle cx="450" cy="510" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="450" y="515">📷</text>
+    <circle cx="506" cy="510" r="22" fill="#dc2626"/><text x="506" y="515">☎</text>
+  </g>
+
+  <g font-size="12" fill="#a5b4fc">
+    <text x="680" y="170">server emitted</text>
+    <text x="680" y="186" font-family="Consolas, monospace" fill="#c7d2fe">waiting-for-admission</text>
+    <text x="680" y="202" fill="#9ca3af">{ adminName }</text>
+    <text x="680" y="500">leave → emits</text>
+    <text x="680" y="516" font-family="Consolas, monospace" fill="#c7d2fe">leave-group-room</text>
+    <text x="40" y="300">host clicks ✓ →</text>
+    <text x="40" y="316" font-family="Consolas, monospace" fill="#c7d2fe">group-admitted</text>
+    <text x="40" y="332" fill="#9ca3af">→ in-call screen</text>
+    <text x="40" y="370">host clicks ✕ →</text>
+    <text x="40" y="386" font-family="Consolas, monospace" fill="#c7d2fe">group-rejected</text>
+    <text x="40" y="402" fill="#9ca3af">→ alert + back to</text>
+    <text x="40" y="418" fill="#9ca3af">/dashboard/group-calling</text>
+  </g>
+</svg>

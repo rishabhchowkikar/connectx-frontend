@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="nb" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="v1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#334155"/><stop offset="1" stop-color="#1e293b"/></linearGradient>
+    <linearGradient id="v2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3f3f46"/><stop offset="1" stop-color="#27272a"/></linearGradient>
+  </defs>
+  <rect width="1280" height="720" rx="14" fill="#101115"/>
+
+  <!-- top bar -->
+  <rect x="0" y="0" width="1280" height="48" rx="14" fill="#18191c"/>
+  <rect x="0" y="34" width="1280" height="14" fill="#18191c"/>
+  <line x1="0" y1="48" x2="1280" y2="48" stroke="#fff" stroke-opacity="0.06"/>
+  <rect x="16" y="12" width="86" height="24" rx="8" fill="#fff" fill-opacity="0.06" stroke="#fff" stroke-opacity="0.1"/>
+  <text x="59" y="29" text-anchor="middle" font-size="12" fill="#fff">Connected</text>
+  <text x="114" y="29" font-size="12" fill="#9ca3af">👥 5 / 10</text>
+  <rect x="176" y="13" width="62" height="22" rx="6" fill="#facc15" fill-opacity="0.1" stroke="#facc15" stroke-opacity="0.2"/>
+  <text x="207" y="28" text-anchor="middle" font-size="11" font-weight="600" fill="#facc15">♛ Host</text>
+  <text x="250" y="29" font-size="12" fill="#9ca3af" font-family="Consolas, monospace">08:15</text>
+
+  <rect x="880" y="10" width="150" height="28" rx="8" fill="#facc15" fill-opacity="0.15" stroke="#facc15" stroke-opacity="0.3"/>
+  <text x="955" y="29" text-anchor="middle" font-size="12" fill="#fde047">🖐️ Sam</text>
+  <rect x="1040" y="10" width="100" height="28" rx="8" fill="#6366f1" fill-opacity="0.15" stroke="#6366f1" stroke-opacity="0.4"/>
+  <text x="1090" y="29" text-anchor="middle" font-size="12" fill="#a5b4fc">👥 2 waiting</text>
+
+  <!-- grid: 5 tiles, 3 cols x 2 rows, orphan row centred -->
+  <!-- tile 0 (you, host, speaking) -->
+  <rect x="10" y="58" width="318" height="286" rx="14" fill="url(#v1)" stroke="#6366f1" stroke-width="2"/>
+  <circle cx="169" cy="180" r="46" fill="#475569"/>
+  <path d="M89 344 C 99 270, 239 270, 249 344 Z" fill="#475569"/>
+  <rect x="20" y="68" width="32" height="16" rx="3" fill="#6366f1" fill-opacity="0.16" stroke="#6366f1" stroke-opacity="0.25"/>
+  <text x="36" y="80" text-anchor="middle" font-size="9" font-weight="700" fill="#6366f1">YOU</text>
+  <rect x="10" y="306" width="318" height="38" rx="0" fill="url(#nb)"/>
+  <text x="22" y="333" font-size="12" fill="#facc15">♛</text>
+  <text x="38" y="333" font-size="12" font-weight="500" fill="#fff">You (Rishabh)</text>
+  <g fill="#6366f1"><rect x="296" y="326" width="2" height="4"/><rect x="300" y="323" width="2" height="7"/><rect x="304" y="319" width="2" height="11"/><rect x="308" y="322" width="2" height="8"/><rect x="312" y="325" width="2" height="5"/></g>
+  <text x="169" y="296" text-anchor="middle" font-size="30">👍</text>
+
+  <!-- tile 1 -->
+  <rect x="338" y="58" width="318" height="286" rx="14" fill="url(#v2)" stroke="#fff" stroke-opacity="0.06"/>
+  <circle cx="497" cy="180" r="46" fill="#52525b"/>
+  <path d="M417 344 C 427 270, 567 270, 577 344 Z" fill="#52525b"/>
+  <rect x="338" y="306" width="318" height="38" fill="url(#nb)"/>
+  <text x="350" y="333" font-size="12" font-weight="500" fill="#fff">Maya</text>
+  <g fill="#4ade80"><rect x="624" y="326" width="2" height="4"/><rect x="628" y="323" width="2" height="7"/><rect x="632" y="319" width="2" height="11"/><rect x="636" y="322" width="2" height="8"/><rect x="640" y="325" width="2" height="5"/></g>
+  <!-- kick on hover -->
+  <circle cx="634" cy="80" r="12" fill="#ef4444" fill-opacity="0.85"/>
+  <text x="634" y="85" text-anchor="middle" font-size="12" fill="#fff">✕</text>
+
+  <!-- tile 2 (hand raised) -->
+  <rect x="666" y="58" width="318" height="286" rx="14" fill="url(#v1)" stroke="#fff" stroke-opacity="0.06"/>
+  <circle cx="825" cy="180" r="46" fill="#475569"/>
+  <path d="M745 344 C 755 270, 895 270, 905 344 Z" fill="#475569"/>
+  <circle cx="962" cy="80" r="14" fill="#facc15"/>
+  <text x="962" y="85" text-anchor="middle" font-size="13">🖐️</text>
+  <rect x="666" y="306" width="318" height="38" fill="url(#nb)"/>
+  <text x="678" y="333" font-size="12" font-weight="500" fill="#fff">Sam</text>
+  <g fill="#4ade80"><rect x="952" y="326" width="2" height="4"/><rect x="956" y="323" width="2" height="7"/><rect x="960" y="319" width="2" height="11"/><rect x="964" y="322" width="2" height="8"/><rect x="968" y="325" width="2" height="5"/></g>
+
+  <!-- tile 3 (cam off) -->
+  <rect x="174" y="354" width="318" height="286" rx="14" fill="#16171a" stroke="#fff" stroke-opacity="0.06"/>
+  <circle cx="333" cy="490" r="27" fill="#f59e0b" fill-opacity="0.12" stroke="#f59e0b" stroke-opacity="0.27" stroke-width="2"/>
+  <text x="333" y="497" text-anchor="middle" font-size="20" font-weight="700" fill="#f59e0b">T</text>
+  <text x="333" y="534" text-anchor="middle" font-size="10" fill="#6b7280">▭ Camera off</text>
+  <rect x="174" y="602" width="318" height="38" fill="url(#nb)"/>
+  <text x="186" y="629" font-size="12" font-weight="500" fill="#fff">Tara</text>
+  <g fill="#4ade80"><rect x="460" y="622" width="2" height="4"/><rect x="464" y="619" width="2" height="7"/><rect x="468" y="615" width="2" height="11"/><rect x="472" y="618" width="2" height="8"/><rect x="476" y="621" width="2" height="5"/></g>
+
+  <!-- tile 4 (connecting) -->
+  <rect x="502" y="354" width="318" height="286" rx="14" fill="#16171a" stroke="#fff" stroke-opacity="0.06"/>
+  <ellipse cx="661" cy="497" rx="120" ry="90" fill="#10b981" fill-opacity="0.05"/>
+  <text x="661" y="500" text-anchor="middle" font-size="11" fill="#4b5563">connecting… (no stream yet)</text>
+  <rect x="502" y="602" width="318" height="38" fill="url(#nb)"/>
+  <text x="514" y="629" font-size="12" font-weight="500" fill="#fff">Omar</text>
+  <g fill="#4ade80"><rect x="788" y="622" width="2" height="4"/><rect x="792" y="619" width="2" height="7"/><rect x="796" y="615" width="2" height="11"/><rect x="800" y="618" width="2" height="8"/><rect x="804" y="621" width="2" height="5"/></g>
+
+  <!-- waiting panel -->
+  <rect x="994" y="48" width="286" height="604" fill="#18191c"/>
+  <line x1="994" y1="48" x2="994" y2="652" stroke="#fff" stroke-opacity="0.06"/>
+  <text x="1010" y="80" font-size="13" font-weight="600" fill="#fff"><tspan fill="#818cf8">👥</tspan> Waiting (2)</text>
+  <text x="1258" y="80" font-size="13" fill="#6b7280">✕</text>
+  <line x1="994" y1="96" x2="1280" y2="96" stroke="#fff" stroke-opacity="0.06"/>
+  <g>
+    <rect x="1004" y="106" width="266" height="50" rx="12" fill="#fff" fill-opacity="0.04" stroke="#fff" stroke-opacity="0.06"/>
+    <circle cx="1030" cy="131" r="16" fill="#4f46e5"/><text x="1030" y="136" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">L</text>
+    <text x="1054" y="136" font-size="13" fill="#fff">Leo</text>
+    <circle cx="1216" cy="131" r="14" fill="#15803d"/><text x="1216" y="136" text-anchor="middle" font-size="12" fill="#fff">✓</text>
+    <circle cx="1250" cy="131" r="14" fill="#991b1b"/><text x="1250" y="136" text-anchor="middle" font-size="12" fill="#fff">✕</text>
+
+    <rect x="1004" y="164" width="266" height="50" rx="12" fill="#fff" fill-opacity="0.04" stroke="#fff" stroke-opacity="0.06"/>
+    <circle cx="1030" cy="189" r="16" fill="#4f46e5"/><text x="1030" y="194" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">P</text>
+    <text x="1054" y="194" font-size="13" fill="#fff">Priya</text>
+    <circle cx="1216" cy="189" r="14" fill="#15803d"/><text x="1216" y="194" text-anchor="middle" font-size="12" fill="#fff">✓</text>
+    <circle cx="1250" cy="189" r="14" fill="#991b1b"/><text x="1250" y="194" text-anchor="middle" font-size="12" fill="#fff">✕</text>
+  </g>
+  <line x1="994" y1="592" x2="1280" y2="592" stroke="#fff" stroke-opacity="0.06"/>
+  <rect x="1004" y="602" width="266" height="36" rx="12" fill="#4f46e5"/>
+  <text x="1137" y="625" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Admit All (2)</text>
+
+  <!-- toasts -->
+  <rect x="1104" y="232" width="160" height="32" rx="12" fill="#10b981" fill-opacity="0.18" stroke="#10b981" stroke-opacity="0.35"/>
+  <text x="1118" y="253" font-size="13" font-weight="500" fill="#fff">→ Omar Joined</text>
+  <rect x="1064" y="270" width="200" height="32" rx="12" fill="#ef4444" fill-opacity="0.18" stroke="#ef4444" stroke-opacity="0.35"/>
+  <text x="1078" y="291" font-size="13" font-weight="500" fill="#fff">← Jay Left the room</text>
+
+  <!-- controls -->
+  <rect x="0" y="652" width="1280" height="68" rx="14" fill="#18191c"/>
+  <rect x="0" y="652" width="1280" height="14" fill="#18191c"/>
+  <line x1="0" y1="652" x2="1280" y2="652" stroke="#fff" stroke-opacity="0.06"/>
+  <g text-anchor="middle" font-size="15" fill="#fff">
+    <circle cx="420" cy="686" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="420" y="691">🎤</text>
+    <circle cx="474" cy="686" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="474" y="691">📷</text>
+    <circle cx="528" cy="686" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="528" y="691">⚙</text>
+    <circle cx="582" cy="686" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="582" y="691">🖐️</text>
+    <circle cx="636" cy="686" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="636" y="691">😊</text>
+    <circle cx="690" cy="686" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="690" y="691">💬</text>
+    <circle cx="704" cy="672" r="8" fill="#ef4444" stroke="#18191c" stroke-width="2"/><text x="704" y="675" font-size="8" font-weight="700">3</text>
+    <circle cx="744" cy="686" r="22" fill="#fff" fill-opacity="0.07" stroke="#fff" stroke-opacity="0.12"/><text x="744" y="691">🔇</text>
+    <rect x="752" y="664" width="18" height="11" rx="2" fill="#facc15"/><text x="761" y="673" font-size="7" font-weight="700" fill="#000">ALL</text>
+    <rect x="782" y="664" width="92" height="44" rx="22" fill="#ef4444"/><text x="828" y="691" font-size="13" font-weight="600">☎ Leave</text>
+  </g>
+</svg>
