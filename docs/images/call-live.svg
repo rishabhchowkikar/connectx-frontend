@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="remote" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0b1120"/>
+    </linearGradient>
+    <linearGradient id="scrim" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" x2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="680" rx="14" fill="#101115"/>
+  <!-- remote video full-bleed (leaves room for chat dock) -->
+  <rect x="0" y="0" width="920" height="680" rx="14" fill="url(#remote)"/>
+  <circle cx="460" cy="290" r="90" fill="#334155"/>
+  <path d="M280 680 C 300 470, 620 470, 640 680 Z" fill="#334155"/>
+
+  <!-- status badge -->
+  <rect x="20" y="20" width="248" height="38" rx="8" fill="#000" fill-opacity="0.6" stroke="#fff" stroke-opacity="0.1"/>
+  <text x="36" y="44" font-size="14" font-weight="500" fill="#fff">Connected</text>
+  <text x="118" y="44" font-size="12" fill="#ffffff" fill-opacity="0.6" font-family="Consolas, monospace">12:47</text>
+  <rect x="170" y="29" width="84" height="20" rx="5" fill="#16a34a"/>
+  <text x="212" y="43" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">▭ Sharing</text>
+
+  <!-- local PiP -->
+  <rect x="676" y="16" width="224" height="126" rx="12" fill="#111827" stroke="#fff" stroke-opacity="0.2" stroke-width="2"/>
+  <rect x="690" y="30" width="196" height="98" rx="4" fill="#1e3a8a" fill-opacity="0.35"/>
+  <text x="788" y="84" text-anchor="middle" font-size="11" fill="#93c5fd">your screen (object-contain)</text>
+  <rect x="684" y="118" width="32" height="16" rx="3" fill="#000" fill-opacity="0.6"/>
+  <text x="700" y="130" text-anchor="middle" font-size="10" fill="#fff">You</text>
+
+  <!-- remote name -->
+  <rect x="20" y="524" width="80" height="30" rx="6" fill="#000" fill-opacity="0.6"/>
+  <text x="60" y="544" text-anchor="middle" font-size="13" fill="#fff">Maya</text>
+
+  <!-- floating reactions -->
+  <text x="40" y="350" font-size="34">🔥</text>
+  <text x="58" y="300" font-size="28" opacity="0.6">🔥</text>
+  <text x="640" y="470" font-size="34">👏</text>
+
+  <!-- invite popup -->
+  <rect x="20" y="380" width="340" height="120" rx="16" fill="#1e2025" fill-opacity="0.95" stroke="#fff" stroke-opacity="0.1"/>
+  <rect x="20" y="380" width="340" height="2" fill="url(#bar)"/>
+  <circle cx="48" cy="410" r="14" fill="#3b82f6" fill-opacity="0.15"/>
+  <text x="48" y="415" text-anchor="middle" font-size="12" fill="#60a5fa">🔗</text>
+  <text x="70" y="415" font-size="13" font-weight="600" fill="#fff">Invite to meeting</text>
+  <text x="340" y="415" font-size="13" fill="#6b7280">✕</text>
+  <rect x="36" y="432" width="308" height="36" rx="10" fill="#fff" fill-opacity="0.05" stroke="#fff" stroke-opacity="0.1"/>
+  <text x="48" y="455" font-size="11" fill="#9ca3af" font-family="Consolas, monospace">https://…/call/3f1c9a2e-…</text>
+  <rect x="270" y="438" width="66" height="24" rx="6" fill="#22c55e" fill-opacity="0.2" stroke="#22c55e" stroke-opacity="0.3"/>
+  <text x="303" y="455" text-anchor="middle" font-size="11" font-weight="600" fill="#4ade80">✓ Copied</text>
+  <text x="36" y="488" font-size="10" fill="#4b5563">Share this link with people you want in this meeting.</text>
+
+  <!-- controls -->
+  <rect x="0" y="560" width="920" height="120" fill="url(#scrim)"/>
+  <g font-size="17" text-anchor="middle" fill="#fff">
+    <circle cx="232" cy="628" r="27" fill="#3c4043"/><text x="232" y="634">🎤</text>
+    <circle cx="296" cy="628" r="27" fill="#ea4335"/><text x="296" y="634">⊘</text>
+    <circle cx="360" cy="628" r="27" fill="#3c4043"/><text x="360" y="634">⚙</text>
+    <circle cx="424" cy="628" r="27" fill="#16a34a"/><text x="424" y="634">▭</text>
+    <circle cx="488" cy="628" r="27" fill="#3c4043"/><text x="488" y="634">ⓘ</text>
+    <circle cx="552" cy="628" r="27" fill="#2563eb"/><text x="552" y="634">💬</text>
+    <circle cx="616" cy="628" r="27" fill="#3c4043"/><text x="616" y="634">😊</text>
+    <rect x="660" y="601" width="96" height="54" rx="27" fill="#ea4335"/><text x="708" y="634" font-size="14" font-weight="600">☎ End</text>
+  </g>
+  <!-- reaction picker -->
+  <rect x="496" y="500" width="240" height="46" rx="16" fill="#2d2d30" fill-opacity="0.95" stroke="#374151"/>
+  <text x="616" y="531" text-anchor="middle" font-size="22">👍 ❤️ 😂 😮 👏 🔥</text>
+
+  <!-- chat dock -->
+  <rect x="920" y="0" width="280" height="680" rx="0" fill="#1e1f22"/>
+  <rect x="1186" y="0" width="14" height="680" rx="14" fill="#1e1f22"/>
+  <line x1="920" y1="0" x2="920" y2="680" stroke="#fff" stroke-opacity="0.05"/>
+  <text x="936" y="32" font-size="13" font-weight="600" fill="#fff">Chat · Maya</text>
+  <text x="1176" y="32" font-size="13" fill="#6b7280">✕</text>
+  <line x1="920" y1="48" x2="1200" y2="48" stroke="#fff" stroke-opacity="0.05"/>
+
+  <text x="938" y="80" font-size="10" fill="#4b5563">Maya · 10:42</text>
+  <rect x="936" y="86" width="190" height="34" rx="14" fill="#fff" fill-opacity="0.1"/>
+  <text x="948" y="108" font-size="13" fill="#fff">Can you see my screen?</text>
+
+  <text x="1184" y="146" text-anchor="end" font-size="10" fill="#4b5563">You · 10:42</text>
+  <rect x="1060" y="152" width="124" height="34" rx="14" fill="#2563eb"/>
+  <text x="1072" y="174" font-size="13" fill="#fff">Yes, loud &amp; clear</text>
+
+  <rect x="936" y="200" width="56" height="30" rx="14" fill="#fff" fill-opacity="0.1"/>
+  <circle cx="952" cy="215" r="3" fill="#9ca3af"/><circle cx="964" cy="211" r="3" fill="#9ca3af"/><circle cx="976" cy="215" r="3" fill="#9ca3af"/>
+  <text x="1000" y="220" font-size="10" fill="#6b7280">peer typing…</text>
+
+  <line x1="920" y1="626" x2="1200" y2="626" stroke="#fff" stroke-opacity="0.05"/>
+  <rect x="934" y="638" width="206" height="34" rx="12" fill="#fff" fill-opacity="0.05" stroke="#fff" stroke-opacity="0.1"/>
+  <text x="946" y="660" font-size="13" fill="#4b5563">Type a message…</text>
+  <rect x="1148" y="638" width="36" height="34" rx="12" fill="#2563eb"/>
+  <text x="1166" y="661" text-anchor="middle" font-size="14" fill="#fff">➤</text>
+
+  <!-- annotations -->
+  <g font-size="11" fill="#a5b4fc">
+    <text x="280" y="44">← status + call timer (starts when peer connects)</text>
+    <text x="690" y="160">local PiP · mirrored camera, or your screen</text>
+    <text x="232" y="590" text-anchor="middle">mic</text>
+    <text x="296" y="590" text-anchor="middle">cam</text>
+    <text x="360" y="590" text-anchor="middle">devices</text>
+    <text x="424" y="590" text-anchor="middle">share</text>
+    <text x="488" y="590" text-anchor="middle">invite</text>
+  </g>
+</svg>

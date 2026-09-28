@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="hl" x1="0" x2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="av" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#9333ea"/>
+    </linearGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="640" rx="14" fill="#f8fafc"/>
+
+  <!-- sidebar -->
+  <rect x="0" y="0" width="240" height="640" rx="14" fill="#fafafa"/>
+  <rect x="232" y="0" width="8" height="640" fill="#fafafa"/>
+  <line x1="240" y1="0" x2="240" y2="640" stroke="#e5e7eb"/>
+  <rect x="18" y="20" width="34" height="34" rx="8" fill="#18181b"/>
+  <rect x="27" y="31" width="12" height="12" rx="2" fill="none" stroke="#fff" stroke-width="2"/>
+  <path d="M39 35 L45 31 L45 43 L39 39 Z" fill="#fff"/>
+  <text x="62" y="34" font-size="14" font-weight="600" fill="#18181b">ConnectX</text>
+  <text x="62" y="50" font-size="12" fill="#71717a">v1.0.0</text>
+  <text x="26" y="96" font-size="13" font-weight="600" fill="#18181b">Meeting</text>
+  <line x1="34" y1="108" x2="34" y2="178" stroke="#e5e7eb"/>
+  <rect x="44" y="112" width="178" height="30" rx="6" fill="#f4f4f5"/>
+  <text x="56" y="132" font-size="13" fill="#18181b" font-weight="600">One on One Link</text>
+  <text x="56" y="168" font-size="13" fill="#52525b">Group Calling</text>
+
+  <!-- navbar -->
+  <rect x="240" y="0" width="960" height="68" fill="#ffffff"/>
+  <line x1="240" y1="68" x2="1200" y2="68" stroke="#e2e8f0"/>
+  <text x="272" y="42" font-size="22" font-weight="700" fill="#1e293b">Dashboard</text>
+  <rect x="820" y="20" width="104" height="30" rx="6" fill="#f8fafc" stroke="#f1f5f9"/>
+  <text x="872" y="40" text-anchor="middle" font-size="12" fill="#64748b" font-weight="600">Mon, Sep 28</text>
+  <line x1="944" y1="18" x2="944" y2="50" stroke="#e2e8f0"/>
+  <text x="1020" y="40" text-anchor="end" font-size="13" font-weight="600" fill="#1e293b">Rishabh</text>
+  <circle cx="1048" cy="34" r="20" fill="url(#av)" stroke="#fff" stroke-width="2"/>
+  <text x="1048" y="40" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">R</text>
+  <text x="1086" y="40" font-size="13" fill="#94a3b8" font-weight="600">⎋ Sign out</text>
+
+  <!-- hero left -->
+  <rect x="290" y="130" width="228" height="30" rx="15" fill="#e0e7ff" stroke="#c7d2fe"/>
+  <text x="404" y="150" text-anchor="middle" font-size="13" font-weight="600" fill="#4338ca">🚀 ConnectX Real-Time Video</text>
+  <text x="290" y="218" font-size="44" font-weight="800" fill="#0f172a">Collaborate <tspan fill="url(#hl)">Instantly.</tspan></text>
+  <text x="290" y="272" font-size="44" font-weight="800" fill="#0f172a">Anytime, anywhere.</text>
+  <text x="290" y="318" font-size="16" fill="#475569">Create secure, high-definition video rooms in seconds.</text>
+  <text x="290" y="342" font-size="16" fill="#475569">Experience seamless connection designed for modern teams.</text>
+
+  <rect x="290" y="376" width="186" height="56" rx="12" fill="#4f46e5"/>
+  <rect x="316" y="396" width="16" height="16" rx="3" fill="none" stroke="#fff" stroke-width="2"/>
+  <path d="M332 401 L340 396 L340 412 L332 407 Z" fill="#fff"/>
+  <text x="352" y="410" font-size="15" font-weight="600" fill="#fff">Start Meeting</text>
+
+  <rect x="492" y="376" width="270" height="56" rx="12" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="508" y="396" width="18" height="14" rx="2" fill="none" stroke="#94a3b8" stroke-width="1.6"/>
+  <text x="540" y="410" font-size="15" fill="#94a3b8">Enter room code...</text>
+  <rect x="716" y="386" width="36" height="36" rx="8" fill="#f8fafc"/>
+  <text x="734" y="410" text-anchor="middle" font-size="18" fill="#cbd5e1">→</text>
+
+  <!-- hero right mockup -->
+  <circle cx="930" cy="360" r="210" fill="#e0e7ff" opacity="0.45"/>
+  <g filter="url(#sh)">
+    <rect x="780" y="150" width="320" height="320" rx="16" fill="#fff" stroke="#f1f5f9"/>
+  </g>
+  <rect x="780" y="150" width="320" height="34" rx="16" fill="#f8fafc"/>
+  <rect x="780" y="170" width="320" height="14" fill="#f8fafc"/>
+  <circle cx="800" cy="167" r="5" fill="#f87171"/>
+  <circle cx="816" cy="167" r="5" fill="#fbbf24"/>
+  <circle cx="832" cy="167" r="5" fill="#4ade80"/>
+  <rect x="780" y="184" width="320" height="286" fill="#f1f5f9"/>
+  <rect x="796" y="198" width="140" height="124" rx="10" fill="#e2e8f0"/>
+  <rect x="944" y="198" width="140" height="124" rx="10" fill="#cbd5e1"/>
+  <rect x="796" y="330" width="140" height="124" rx="10" fill="#cbd5e1"/>
+  <rect x="944" y="330" width="140" height="124" rx="10" fill="#e2e8f0"/>
+  <g font-size="11" font-weight="700" fill="#fff" text-anchor="middle">
+    <circle cx="818" cy="300" r="12" fill="#6366f1" stroke="#fff" stroke-width="2"/><text x="818" y="304">C</text>
+    <circle cx="966" cy="300" r="12" fill="#10b981" stroke="#fff" stroke-width="2"/><text x="966" y="304">M</text>
+    <circle cx="818" cy="432" r="12" fill="#f59e0b" stroke="#fff" stroke-width="2"/><text x="818" y="436">S</text>
+    <circle cx="966" cy="432" r="12" fill="#f43f5e" stroke="#fff" stroke-width="2"/><text x="966" y="436">T</text>
+  </g>
+
+  <!-- annotations -->
+  <g font-size="12" fill="#4338ca">
+    <line x1="383" y1="432" x2="383" y2="492" stroke="#a5b4fc" stroke-dasharray="4 3"/>
+    <text x="290" y="510">uuid v4 → router.push(/call/{uuid})</text>
+    <line x1="627" y1="432" x2="627" y2="540" stroke="#a5b4fc" stroke-dasharray="4 3"/>
+    <text x="520" y="558">Enter / → pushes /call/{code}</text>
+    <line x1="140" y1="142" x2="140" y2="230" stroke="#a5b4fc" stroke-dasharray="4 3"/>
+    <text x="26" y="250">active item follows</text>
+    <text x="26" y="266">usePathname()</text>
+  </g>
+</svg>

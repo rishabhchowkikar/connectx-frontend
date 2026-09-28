@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="nb" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="v" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#334155"/><stop offset="1" stop-color="#1e293b"/></linearGradient>
+  </defs>
+  <rect width="900" height="420" rx="14" fill="#0b0c0f"/>
+  <text x="24" y="32" font-size="13" fill="#818cf8" font-weight="600">&lt;VideoTile /&gt; anatomy (group call)</text>
+
+  <!-- tile -->
+  <rect x="250" y="60" width="400" height="300" rx="14" fill="url(#v)" stroke="#8b5cf6" stroke-width="2"/>
+  <rect x="246" y="56" width="408" height="308" rx="17" fill="none" stroke="#8b5cf6" stroke-opacity="0.25" stroke-width="4"/>
+  <circle cx="450" cy="180" r="52" fill="#475569"/>
+  <path d="M360 360 C 372 280, 528 280, 540 360 Z" fill="#475569"/>
+
+  <rect x="262" y="72" width="34" height="17" rx="3" fill="#8b5cf6" fill-opacity="0.16" stroke="#8b5cf6" stroke-opacity="0.25"/>
+  <text x="279" y="85" text-anchor="middle" font-size="9" font-weight="700" fill="#8b5cf6">YOU</text>
+
+  <circle cx="624" cy="86" r="14" fill="#facc15"/>
+  <text x="624" y="91" text-anchor="middle" font-size="13">🖐️</text>
+
+  <text x="450" y="300" text-anchor="middle" font-size="30">❤️</text>
+
+  <rect x="250" y="318" width="400" height="42" fill="url(#nb)"/>
+  <text x="264" y="345" font-size="13" fill="#facc15">♛</text>
+  <text x="282" y="345" font-size="13" font-weight="500" fill="#fff">You (Rishabh)</text>
+  <g fill="#8b5cf6"><rect x="610" y="338" width="2" height="5"/><rect x="615" y="334" width="2" height="9"/><rect x="620" y="330" width="2" height="13"/><rect x="625" y="333" width="2" height="10"/><rect x="630" y="337" width="2" height="6"/></g>
+
+  <!-- callouts -->
+  <g font-size="12" fill="#c7d2fe" stroke="none">
+    <line x1="262" y1="80" x2="200" y2="80" stroke="#6366f1" stroke-dasharray="3 3"/>
+    <text x="194" y="76" text-anchor="end">"YOU" pill</text>
+    <text x="194" y="92" text-anchor="end" fill="#6b7280">local tile only</text>
+
+    <line x1="264" y1="341" x2="200" y2="300" stroke="#6366f1" stroke-dasharray="3 3"/>
+    <text x="194" y="286" text-anchor="end">♛ crown</text>
+    <text x="194" y="302" text-anchor="end" fill="#6b7280">on your own tile</text>
+    <text x="194" y="318" text-anchor="end" fill="#6b7280">when you are host</text>
+
+    <line x1="248" y1="200" x2="200" y2="200" stroke="#6366f1" stroke-dasharray="3 3"/>
+    <text x="194" y="196" text-anchor="end">active-speaker ring</text>
+    <text x="194" y="212" text-anchor="end" fill="#6b7280">cycles every 2.8 s</text>
+
+    <line x1="638" y1="86" x2="700" y2="86" stroke="#6366f1" stroke-dasharray="3 3"/>
+    <text x="706" y="82">raised hand</text>
+    <text x="706" y="98" fill="#6b7280">pulses until lowered</text>
+    <text x="706" y="126">(remote tiles: ✕ kick</text>
+    <text x="706" y="142">button here on hover,</text>
+    <text x="706" y="158">host only)</text>
+
+    <line x1="470" y1="290" x2="700" y2="230" stroke="#6366f1" stroke-dasharray="3 3"/>
+    <text x="706" y="226">reaction floats up</text>
+    <text x="706" y="242" fill="#6b7280">and fades in 2.5 s</text>
+
+    <line x1="634" y1="330" x2="700" y2="300" stroke="#6366f1" stroke-dasharray="3 3"/>
+    <text x="706" y="296">5 animated audio bars</text>
+    <text x="706" y="312" fill="#6b7280">red mic-off dot when muted</text>
+
+    <text x="450" y="392" text-anchor="middle" fill="#6b7280">camera off → coloured initial avatar + "Camera off" · no stream yet → soft "breathing" placeholder</text>
+  </g>
+</svg>
